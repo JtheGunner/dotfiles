@@ -1,0 +1,11 @@
+alias ls='ls --color=auto'
+alias ll='ls -alF'
+alias la='ls -A'
+alias grep='grep --color=auto'
+alias tf='terraform'
+alias k='/usr/local/bin/kubectl'
+alias f='/home/linuxbrew/.linuxbrew/bin/flux'
+
+alias kdash-token='kubectl -n kubernetes-dashboard create token admin-user'
+alias lazygit='$HOME/data/scripts/lazygit.sh'
+alias dotfiles='/usr/bin/git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
