@@ -1,0 +1,45 @@
+# omnishell configuration, version-controlled here and copied to
+# ~/.config/omnishell/config.toml by bootstrap.sh.
+#
+# omnishell owns everything that is an rc *line* (plugin inits, history/
+# completion options, tool activation). Files at a path (git config, tmux.conf,
+# starship.toml, ...) are handled by the stow packages in this repo instead.
+#
+# Tools planned as omnishell modules but not yet released (direnv, mise,
+# starship, colorized-man) are activated from ./shell.d/ for now and will move
+# here once those modules land upstream.
+
+[omnishell]
+version = 1
+shells = ["zsh", "bash"]
+
+[modules.completion]
+enabled = true
+
+[modules.history]
+enabled = true
+[modules.history.options]
+size = 50000
+
+[modules.autosuggestions]
+enabled = true
+
+[modules.syntax-highlighting]
+enabled = true
+
+[modules.fzf]
+enabled = true
+[modules.fzf.options]
+ctrl_r = true
+ctrl_t = true
+default_opts = "--height 40% --reverse --border"
+
+[modules.zoxide]
+enabled = true
+[modules.zoxide.options]
+cmd = "z"
+
+[modules.modern-aliases]
+enabled = true
+[modules.modern-aliases.options]
+replace = ["ls", "cat", "find"]

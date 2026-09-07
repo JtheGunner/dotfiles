@@ -1,0 +1,4 @@
+# Inherit the terminal's Root Loops colors instead of shipping a fixed theme.
+# bat backs delta (git paging/diffs) and fzf previews, so this keeps those
+# consistent with the rest of the terminal.
+--theme="ansi"

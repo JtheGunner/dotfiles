@@ -1,0 +1,16 @@
+# Files/dirs in the repo root that are NOT stow packages.
+# `stow */` from the repo root will still try to treat every dir as a package,
+# so keep non-package dirs out of stow runs by listing them here or by being
+# explicit about which packages to stow (see bootstrap.sh).
+\.git
+\.github
+\.idea
+\.gitignore
+\.stow-local-ignore
+README\.md
+bootstrap\.sh
+Makefile
+LICENSE
+omnishell
+shell\.d
+rootloops
