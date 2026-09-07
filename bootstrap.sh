@@ -85,14 +85,39 @@ install_deps() {
 # --------------------------------------------------------------------------
 # 1b. omnishell + ghostty
 # --------------------------------------------------------------------------
+# Ubuntu/Debian have no official ghostty package; use the community .deb from
+# github.com/mkasberg/ghostty-ubuntu (the standard route for Ubuntu).
+_install_ghostty_deb() {
+  command -v curl >/dev/null 2>&1 || return 1
+  local ver arch url tmp rc
+  ver="$(. /etc/os-release 2>/dev/null && echo "${VERSION_ID:-}")"
+  arch="$(dpkg --print-architecture 2>/dev/null)"
+  [ -n "$ver" ] && [ -n "$arch" ] || return 1
+  url="$(curl -fsSL https://api.github.com/repos/mkasberg/ghostty-ubuntu/releases/latest \
+        | grep -oE "https://[^\"]*ghostty_[^\"]*_${arch}_${ver}\.deb" | head -1)"
+  [ -n "$url" ] || { warn "no ghostty .deb for Ubuntu $ver/$arch"; return 1; }
+  tmp="$(mktemp --suffix=.deb)"
+  curl -fsSL -o "$tmp" "$url" || { rm -f "$tmp"; return 1; }
+  $SUDO apt-get install -y -qq "$tmp"; rc=$?
+  rm -f "$tmp"
+  return $rc
+}
+
 install_ghostty() {
   command -v ghostty >/dev/null 2>&1 && { log "ghostty already installed"; return; }
-  if [ "$OS" = "Darwin" ] && command -v brew >/dev/null 2>&1; then
-    log "installing ghostty (brew cask)"
-    brew install --cask ghostty || warn "ghostty cask install failed"
+  if [ "$OS" = "Darwin" ]; then
+    if command -v brew >/dev/null 2>&1; then
+      log "installing ghostty (brew cask)"
+      brew install --cask ghostty || warn "ghostty cask install failed"
+    else
+      warn "install ghostty manually: https://ghostty.org/download"
+    fi
   elif command -v apt-get >/dev/null 2>&1 && apt-cache show ghostty >/dev/null 2>&1; then
     log "installing ghostty (apt)"
-    $SUDO apt-get install -y ghostty || warn "ghostty apt install failed"
+    $SUDO apt-get install -y -qq ghostty || warn "ghostty apt install failed"
+  elif command -v dpkg >/dev/null 2>&1; then
+    log "installing ghostty (mkasberg/ghostty-ubuntu .deb)"
+    _install_ghostty_deb || warn "ghostty install failed - get it at https://ghostty.org/download"
   else
     warn "install ghostty manually: https://ghostty.org/download (config is already stowed)"
   fi
