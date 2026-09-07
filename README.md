@@ -9,6 +9,7 @@ Personal terminal setup for **Debian** and **macOS**, split across three layers:
 | **this repo (stow packages)** | standalone config *files* - `git`, `tmux`, `bat`, `starship`, `mise`, `ghostty` (+ optional `nvim`) | [GNU Stow](https://www.gnu.org/software/stow/) symlinks into `$HOME` |
 | **this repo (rc libraries)** | the base `~/.zshrc` / `~/.bashrc` content - env, keybindings, zsh completion styling | `zsh/zshrc.zsh` + `bash/bashrc.bash`, **`source`d** from a generated real rc file (not stowed - see below) |
 | **this repo (`shell.d/`)** | personal rc lines not worth a public module - k8s/docker aliases, `linuxbrew`, helper functions, and tools still awaiting an omnishell module (`direnv`, `mise`, `starship`) | a second marker block, sourced *after* omnishell |
+| **`~/.zshrc.local` / `~/.bashrc.local`** | machine-specific and secret - per-host `PATH`, tool completions, tokens. **Not version-controlled.** | sourced last by the same marker block |
 
 omnishell is consumed as a released binary (Homebrew tap / curl installer); this
 repo never modifies it.

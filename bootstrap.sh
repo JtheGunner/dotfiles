@@ -239,11 +239,13 @@ apply_omnishell() {
 
 # --------------------------------------------------------------------------
 # 5. append the shell.d block (after omnishell's block) to BOTH rc files,
-#    for parity with omnishell (which hooks both zsh and bash)
+#    for parity with omnishell (which hooks both zsh and bash).
+#    Also sources ~/.<shell>rc.local last: the machine-specific escape hatch
+#    (per-host PATH, tool completions, secrets) that must NOT be in the repo.
 # --------------------------------------------------------------------------
 wire_shell_d() {
   _insert() {
-    local file="$1"
+    local file="$1" localrc="$2"
     [ -f "$file" ] || return 0
     if grep -q '# >>> dotfiles >>>' "$file"; then
       log "shell.d block already present in $(basename "$file")"
@@ -257,11 +259,12 @@ for _f in "\$DOTFILES"/shell.d/*.sh; do
   [ -r "\$_f" ] && . "\$_f"
 done
 unset _f
+[ -r "$localrc" ] && . "$localrc"   # machine-specific, not version-controlled
 # <<< dotfiles <<<
 EOF
   }
-  _insert "$HOME/.zshrc"
-  _insert "$HOME/.bashrc"
+  _insert "$HOME/.zshrc"  "\$HOME/.zshrc.local"
+  _insert "$HOME/.bashrc" "\$HOME/.bashrc.local"
 }
 
 # --------------------------------------------------------------------------
