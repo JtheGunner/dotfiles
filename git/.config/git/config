@@ -1,0 +1,46 @@
+[user]
+	name = Jeffry Würmli
+	email = jeffry.wuermli@gmail.com
+
+[init]
+	defaultBranch = main
+
+[core]
+	pager = delta
+	excludesfile = ~/.config/git/ignore
+
+[interactive]
+	diffFilter = delta --color-only
+
+[delta]
+	line-numbers = true
+	navigate = true      # use n / N to move between diff sections
+	light = false
+	syntax-theme = ansi  # inherit the terminal's Root Loops colors
+
+[merge]
+	conflictstyle = diff3
+
+[diff]
+	colorMoved = default
+
+[fetch]
+	prune = true
+
+[alias]
+	st = status
+	s = status
+	ci = commit -v
+	c = commit -v
+	co = checkout
+	cob = checkout -b
+	coi = !git checkout $(git branch --sort=committerdate | fzf)
+	br = branch
+	d = diff
+	dd = diff --cached
+	cp = cherry-pick
+	ps = push
+	pl = pull
+	pb = pull --rebase
+	l = log --oneline --graph
+	lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
