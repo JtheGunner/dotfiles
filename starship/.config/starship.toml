@@ -1,9 +1,23 @@
 # Get editor completions based on the config schema
 "$schema" = 'https://starship.rs/config-schema.json'
 
-# Inserts a blank line between shell prompts
+# Blank line between prompts (like hamvocke's).
 add_newline = true
 
+# Always show user@host (starship hides them locally by default).
+[username]
+show_always = true
+style_user = "bold green"
+style_root = "bold red"
+format = "[$user]($style)"
+
+[hostname]
+ssh_only = false
+style = "bold green"
+trim_at = "."
+format = "[@$hostname]($style) "
+
+# Noise we don't want in the prompt.
 [package]
 disabled = true
 
