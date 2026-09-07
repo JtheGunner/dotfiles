@@ -1,0 +1,10 @@
+macos-option-as-alt = false
+
+# Colors are defined once, in Root Loops. Regenerate with rootloops/apply.sh.
+config-file = rootloops
+
+window-padding-x = 10
+window-padding-y = 10
+macos-titlebar-proxy-icon = hidden
+
+font-size = 15
