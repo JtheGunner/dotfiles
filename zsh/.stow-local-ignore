@@ -1,0 +1,5 @@
+# Only .zprofile is stowed from this package. The zshrc*.zsh files are a
+# library sourced by the generated ~/.zshrc - stowing them would (a) litter
+# $HOME and (b) let omnishell append back into the repo through the symlink.
+zshrc.*\.zsh
+zshrc-.*\.zsh

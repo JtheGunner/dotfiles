@@ -5,12 +5,29 @@ Personal terminal setup for **Debian** and **macOS**, split across three layers:
 
 | Layer | Owns | Mechanism |
 |-------|------|-----------|
-| **[omnishell](https://github.com/JtheGunner/omnishell)** | rc *lines* - plugin inits, history, completion, `fzf`, `zoxide`, `modern-aliases` | one marker block in your rc file, sourcing a generated `init.<shell>` |
-| **this repo (stow packages)** | config *files at a path* - `git`, `tmux`, `bat`, `starship`, `mise`, `ghostty` (+ optional `nvim`) | [GNU Stow](https://www.gnu.org/software/stow/) symlinks into `$HOME` |
+| **[omnishell](https://github.com/JtheGunner/omnishell)** | rc *lines* - plugin inits, history, completion, `fzf`, `zoxide`, `modern-aliases` | one marker block in `~/.zshrc` / `~/.bashrc`, sourcing a generated `init.<shell>` |
+| **this repo (stow packages)** | standalone config *files* - `git`, `tmux`, `bat`, `starship`, `mise`, `ghostty` (+ optional `nvim`) | [GNU Stow](https://www.gnu.org/software/stow/) symlinks into `$HOME` |
+| **this repo (rc libraries)** | the base `~/.zshrc` / `~/.bashrc` content - env, keybindings, zsh completion styling | `zsh/zshrc.zsh` + `bash/bashrc.bash`, **`source`d** from a generated real rc file (not stowed - see below) |
 | **this repo (`shell.d/`)** | personal rc lines not worth a public module - k8s/docker aliases, `linuxbrew`, helper functions, and tools still awaiting an omnishell module (`direnv`, `mise`, `starship`) | a second marker block, sourced *after* omnishell |
 
 omnishell is consumed as a released binary (Homebrew tap / curl installer); this
 repo never modifies it.
+
+### Why the rc files aren't stowed
+
+`~/.zshrc` and `~/.bashrc` are **generated real files**, each just:
+
+```sh
+# >>> dotfiles:base >>>
+export DOTFILES="$HOME/.dotfiles"
+[ -r "$DOTFILES/zsh/zshrc.zsh" ] && . "$DOTFILES/zsh/zshrc.zsh"
+# <<< dotfiles:base <<<
+```
+
+omnishell and the `shell.d` block then *append* their marker blocks to those
+files. If the rc file were a stow symlink into the repo, those appends would be
+written straight back into version control - so bootstrap writes a real file that
+`source`s the repo's rc library instead.
 
 Install
 -------
@@ -21,9 +38,11 @@ git clone https://github.com/JtheGunner/dotfiles ~/.dotfiles
 exec $SHELL
 ```
 
-`bootstrap.sh` installs dependencies + omnishell, stows the packages, applies
-`omnishell/config.toml`, wires `shell.d/` into your **current** login shell
-(bash or zsh - no `chsh`), and renders the colors. Re-running it is safe.
+`bootstrap.sh` installs dependencies + omnishell + ghostty, writes real
+`~/.zshrc` / `~/.bashrc`, stows the packages, applies `omnishell/config.toml`,
+appends the `shell.d` block to both rc files, and renders the colors. It never
+runs `chsh`. Re-running it is safe. An existing hand-written `~/.zshrc` is moved
+to `~/.zshrc.pre-dotfiles` first.
 
 ### Manual / partial
 
@@ -66,10 +85,13 @@ Layout
 bootstrap.sh              one-shot installer
 Makefile                  stow / colors / check wrappers
 omnishell/config.toml     version-controlled omnishell config
+zsh/zshrc.zsh             rc library sourced by the generated ~/.zshrc (not stowed)
+bash/bashrc.bash          rc library sourced by the generated ~/.bashrc (not stowed)
+zsh/.zprofile             stowed
 shell.d/*.sh              personal rc fragments (sourced after omnishell)
 rootloops/                color single-source (palette.env) + generators
-zsh/ bash/ git/ tmux/     stow packages ->  ~/  and  ~/.config/
-bat/ starship/ mise/ ghostty/
+git/ tmux/ bat/           stow packages ->  ~/  and  ~/.config/
+starship/ mise/ ghostty/
 nvim/                     optional stow package (opt-in)
 ```
 
