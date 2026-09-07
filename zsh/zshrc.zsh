@@ -1,10 +1,13 @@
-# ~/.zshrc - interactive zsh configuration.
+# zsh interactive config LIBRARY - not stowed. bootstrap.sh writes a real
+# ~/.zshrc that does `source "$DOTFILES/zsh/zshrc.zsh"`, so omnishell and the
+# shell.d block can be appended to a real file without writing back into this
+# repo (which a stow symlink would do).
 #
 # Layering (top to bottom = runs first to last):
 #   1. this file        - env, keybindings, zsh-native completion styling
-#   2. ~/.zshrc-<os>     - OS-specific bits
+#   2. zshrc-<os>.zsh   - OS-specific bits
 #   3. # >>> omnishell   - plugin inits, history, fzf, zoxide, ... (managed by omnishell apply)
-#   4. # >>> dotfiles    - ~/.dotfiles/shell.d/*  (personal layer; added by bootstrap.sh)
+#   4. # >>> dotfiles    - $DOTFILES/shell.d/*  (personal layer; added by bootstrap.sh)
 #
 # Adapted from hamvocke/dotfiles; anything omnishell now owns was removed here.
 
@@ -44,8 +47,9 @@ zstyle ':completion:*' complete-options true
 zstyle ':completion:*' group-name ''
 zstyle ':completion:*:*:*:*:descriptions' format '%F{green}-> %d%f'
 
-# OS-specific configuration
+# OS-specific configuration ($DOTFILES is exported by the generated ~/.zshrc)
+: "${DOTFILES:=$HOME/.dotfiles}"
 case "$(uname)" in
-  Darwin) [ -f "$HOME/.zshrc-mac" ]   && source "$HOME/.zshrc-mac" ;;
-  Linux)  [ -f "$HOME/.zshrc-linux" ] && source "$HOME/.zshrc-linux" ;;
+  Darwin) [ -f "$DOTFILES/zsh/zshrc-mac.zsh" ]   && source "$DOTFILES/zsh/zshrc-mac.zsh" ;;
+  Linux)  [ -f "$DOTFILES/zsh/zshrc-linux.zsh" ] && source "$DOTFILES/zsh/zshrc-linux.zsh" ;;
 esac
