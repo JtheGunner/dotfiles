@@ -6,17 +6,7 @@
 	defaultBranch = main
 
 [core]
-	pager = delta
 	excludesfile = ~/.config/git/ignore
-
-[interactive]
-	diffFilter = delta --color-only
-
-[delta]
-	line-numbers = true
-	navigate = true      # use n / N to move between diff sections
-	light = false
-	syntax-theme = ansi  # inherit the terminal's Root Loops colors
 
 [merge]
 	conflictstyle = diff3
@@ -26,6 +16,11 @@
 
 [fetch]
 	prune = true
+
+# delta paging/diff config - written by bootstrap.sh only when `delta` is
+# installed (git-delta is not in Debian stable). git ignores a missing include.
+[include]
+	path = ~/.gitconfig.local
 
 [alias]
 	st = status
