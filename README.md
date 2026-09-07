@@ -98,8 +98,11 @@ nvim/                     optional stow package (opt-in)
 Notes
 -----
 
-- `git` config lives at `~/.config/git/config` (not `~/.gitconfig`); the old file
-  is backed up to `~/.gitconfig.pre-dotfiles` by `bootstrap.sh`.
+- `git` config lives at `~/.config/git/config` (not `~/.gitconfig`). The `delta`
+  paging config is split into `~/.gitconfig.local`, which `bootstrap.sh` writes
+  only when `delta` is installed - on Debian stable `git-delta` (and `eza`, used
+  by omnishell's `modern-aliases`) live in `bookworm-backports`, so without them
+  those pieces degrade gracefully instead of breaking `git`.
 - `shell.d/50-less-colors.sh` and the `direnv`/`mise`/`starship` blocks in
   `shell.d/60-tools.sh` are placeholders for planned omnishell modules; when
   those ship, delete the fragment and enable the module in
