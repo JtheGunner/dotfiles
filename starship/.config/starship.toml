@@ -9,18 +9,18 @@ format = "$username$hostname$directory$git_branch$git_status$character"
 
 [username]
 show_always = true
-style_user = "bold green"
+style_user = "bold blue"
 style_root = "bold red"
 format = "[$user]($style)"
 
 [hostname]
 ssh_only = false
-style = "bold green"
+style = "bold blue"
 trim_at = "."
 format = "[@$hostname]($style):"
 
 [directory]
-style = "bold blue"
+style = "bold purple"
 truncation_length = 0
 truncate_to_repo = false
 format = "[$path]($style)[$read_only]($read_only_style) "
@@ -33,7 +33,7 @@ format = "[$symbol$branch]($style) "
 style = "bold yellow"
 
 [character]
-success_symbol = "[\\$](bold green)"
+success_symbol = "[\\$](bold blue)"
 error_symbol = "[\\$](bold red)"
 
 # Noise we don't want in the prompt.
