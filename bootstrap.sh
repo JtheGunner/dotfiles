@@ -61,9 +61,15 @@ install_deps() {
     for pkg in stow git-delta fzf zoxide direnv ripgrep fd-find bat tmux curl ca-certificates; do
       $SUDO apt-get install -y -qq "$pkg" >/dev/null 2>&1 || warn "apt: $pkg not installed"
     done
-    # starship + mise are not in Debian stable; use their installers
-    command -v starship >/dev/null 2>&1 || curl -fsSL https://starship.rs/install.sh | sh -s -- -y
-    command -v mise >/dev/null 2>&1 || curl -fsSL https://mise.run | sh
+    # starship/mise: not in Debian stable, and older than we want in Ubuntu.
+    # Install into ~/.local/bin so no sudo/TTY is needed (matters over SSH/CI).
+    if ! command -v starship >/dev/null 2>&1; then
+      curl -fsSL https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin" \
+        || warn "starship install failed (prompt falls back to the shell default)"
+    fi
+    if ! command -v mise >/dev/null 2>&1; then
+      curl -fsSL https://mise.run | sh || warn "mise install failed"
+    fi
   else
     warn "no supported package manager found - install deps manually: ${DEPS[*]}"
   fi
