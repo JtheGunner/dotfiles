@@ -1,10 +1,12 @@
-# ~/.bashrc - interactive bash configuration.
+# bash interactive config LIBRARY - not stowed. bootstrap.sh writes a real
+# ~/.bashrc that does `source "$DOTFILES/bash/bashrc.bash"`, so omnishell and the
+# shell.d block can be appended to a real file without writing back into the repo.
 #
 # Layering (top to bottom = runs first to last):
 #   1. this file        - shell options, completion, base prompt
-#   2. ~/.bashrc-<os>    - OS-specific bits
+#   2. bashrc-<os>.bash - OS-specific bits
 #   3. # >>> omnishell   - plugin inits, history, fzf, zoxide, ... (managed by omnishell apply)
-#   4. # >>> dotfiles    - ~/.dotfiles/shell.d/*  (personal layer; added by bootstrap.sh)
+#   4. # >>> dotfiles    - $DOTFILES/shell.d/*  (personal layer; added by bootstrap.sh)
 
 # If not running interactively, don't do anything
 case $- in
@@ -49,8 +51,9 @@ if ! shopt -oq posix; then
   fi
 fi
 
-# OS-specific configuration
+# OS-specific configuration ($DOTFILES is exported by the generated ~/.bashrc)
+: "${DOTFILES:=$HOME/.dotfiles}"
 case "$(uname)" in
-  Darwin) [ -f "$HOME/.bashrc-mac" ]   && . "$HOME/.bashrc-mac" ;;
-  Linux)  [ -f "$HOME/.bashrc-linux" ] && . "$HOME/.bashrc-linux" ;;
+  Darwin) [ -f "$DOTFILES/bash/bashrc-mac.bash" ]   && . "$DOTFILES/bash/bashrc-mac.bash" ;;
+  Linux)  [ -f "$DOTFILES/bash/bashrc-linux.bash" ] && . "$DOTFILES/bash/bashrc-linux.bash" ;;
 esac
