@@ -40,8 +40,16 @@ for t in ${DOTFILES_TERMINALS:-}; do
 done
 [ -d "$DOTFILES/nvim" ] && PACKAGES+=(nvim)
 
-log() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
+log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m warn:\033[0m %s\n' "$*" >&2; }
+
+# move a path aside without ever clobbering an existing backup
+backup_aside() {
+  local src="$1" dst="$1.pre-dotfiles"
+  [ -e "$dst" ] && dst="$1.pre-dotfiles.$(date +%Y%m%dT%H%M%S)"
+  warn "backing up $src -> $dst"
+  mv "$src" "$dst"
+}
 
 # --------------------------------------------------------------------------
 # 1. dependencies
@@ -148,8 +156,7 @@ write_rc_base() {
       return 0
     fi
     if [ -e "$rc" ] && [ ! -L "$rc" ]; then
-      warn "backing up $rc -> $rc.pre-dotfiles"
-      mv "$rc" "$rc.pre-dotfiles"
+      backup_aside "$rc"
     elif [ -L "$rc" ]; then
       rm -f "$rc"   # drop a stale symlink from an earlier layout
     fi
@@ -186,8 +193,7 @@ stow_packages() {
       target="$HOME/$rel"
       [ -e "$target" ] || continue
       case "$(_realpath "$target")" in "$DOTFILES"/*) continue ;; esac
-      warn "backing up $target -> $target.pre-dotfiles"
-      mv "$target" "$target.pre-dotfiles"
+      backup_aside "$target"
     done < <(cd "$DOTFILES/$pkg" && find . -type f | sed 's|^\./||')
   done
   ( cd "$DOTFILES" && stow --restow --target="$HOME" "${PACKAGES[@]}" )
