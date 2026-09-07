@@ -1,9 +1,10 @@
 # Ghostty configuration.
 #
-# Colors come from Root Loops and nothing else - there is deliberately NO
-# `theme =` line here, because `theme` overrides the palette and would kill
-# Root Loops. Regenerate the palette with rootloops/apply.sh.
-config-file = rootloops
+# Colors: Root Loops, via two generated themes (rootloops/apply.sh writes
+# themes/rootloops-dark and themes/rootloops-light). This `theme` line is the
+# ONLY place colors are set - don't add background/foreground/palette below or
+# a stray second `theme`, either would fight this.
+theme = light:rootloops-light,dark:rootloops-dark
 
 # Per-machine overrides, not version-controlled (optional). Lives OUTSIDE the
 # stowed ~/.config/ghostty symlink so edits don't land in the repo. Good place
