@@ -25,8 +25,8 @@ if [ -z "${debian_chroot:-}" ] && [ -r /etc/debian_chroot ]; then
   debian_chroot=$(cat /etc/debian_chroot)
 fi
 
-# Minimal fallback prompt. starship (loaded from shell.d/60-tools.sh) overrides
-# this when installed.
+# Minimal fallback prompt. starship (omnishell's starship module) overrides this
+# when installed.
 PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
 
 # color support for ls / grep

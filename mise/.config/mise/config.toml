@@ -1,8 +1,0 @@
-# Global developer tooling managed by mise (https://mise.jdx.dev).
-# Per-project versions go in a project-local mise.toml. mise is activated from
-# shell.d/60-tools.sh (moving to an omnishell module later - OMNIS-4).
-
-[tools]
-# node = "lts"
-# go = "latest"
-# python = "3.12"

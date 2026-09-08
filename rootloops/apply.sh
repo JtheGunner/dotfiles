@@ -50,32 +50,11 @@ rm -f "$repo/ghostty/.config/ghostty/rootloops"   # old single-palette file
 } > "$repo/shell.d/70-fzf-colors.sh"
 
 # ---------------------------------------------------------------------------
-# 3. Push the palette to whatever terminal is running, via OSC 4/10/11.
-#    This is the terminal-agnostic path: no emulator config needed. Works in
-#    any terminal that honors OSC (kitty, alacritty, wezterm, foot, konsole,
-#    gnome-terminal, xterm, VTE apps, iTerm2, Linux console). macOS Terminal.app
-#    is the notable holdout - it just ignores it. Harmless everywhere.
+# 3. The OSC 4/10/11 palette push to the running terminal is handled by
+#    omnishell's `root-loops` module now (see ../omnishell/config.toml), so it
+#    is no longer generated here. This script only renders the emulator config
+#    files that omnishell's module does not cover.
 # ---------------------------------------------------------------------------
-osc4=""
-for i in $(seq 0 15); do
-  osc4="$osc4$i;#$(c "$i");"
-done
-osc4="${osc4%;}"
-{
-  echo "# $stamp"
-  echo '# Re-colors the current terminal session to the Root Loops palette.'
-  echo 'if [ -t 1 ] && [ -z "${ROOTLOOPS_TERM_APPLIED:-}" ]; then'
-  echo '  _rl() {'
-  echo '    if [ -n "${TMUX:-}" ]; then printf "\033Ptmux;\033\033]%s\007\033\\" "$1"'
-  echo '    else printf "\033]%s\007" "$1"; fi'
-  echo '  }'
-  echo "  _rl '10;#$RL_FG'"
-  echo "  _rl '11;#$RL_BG'"
-  echo "  _rl '4;$osc4'"
-  echo '  unset -f _rl'
-  echo '  export ROOTLOOPS_TERM_APPLIED=1'
-  echo 'fi'
-} > "$repo/shell.d/95-rootloops-term.sh"
 
 # ---------------------------------------------------------------------------
 # 4. Neovim base16 palette (only if the nvim package exists yet - Phase 3)
@@ -113,5 +92,4 @@ fi
 
 echo "wrote ghostty/.config/ghostty/themes/rootloops-{dark,light}"
 echo "wrote shell.d/70-fzf-colors.sh"
-echo "wrote shell.d/95-rootloops-term.sh"
 echo "Root Loops applied. Reload your shell / terminal to see the changes."
