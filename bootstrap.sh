@@ -28,13 +28,13 @@ if [ "$(id -u)" -eq 0 ]; then SUDO=""
 elif command -v sudo >/dev/null 2>&1; then SUDO="sudo"
 else SUDO=""; fi
 
-# installers below drop binaries here (starship, mise, omnishell on non-brew
-# systems); make sure the rest of this script can see them
+# the omnishell installer drops its binary here on non-brew systems (and
+# omnishell's own module installs may too); make sure this script can see them
 export PATH="$HOME/.local/bin:$PATH"
 
 # stow packages = top-level dirs that ship standalone config FILES (not rc files).
 # Ghostty is the terminal of choice; extra terminal packages via DOTFILES_TERMINALS.
-PACKAGES=(zsh git tmux bat starship mise ghostty)
+PACKAGES=(zsh git tmux bat ghostty)
 for t in ${DOTFILES_TERMINALS:-}; do
   case " ${PACKAGES[*]} " in *" $t "*) ;; *) [ -d "$DOTFILES/$t" ] && PACKAGES+=("$t") ;; esac
 done
@@ -54,7 +54,9 @@ backup_aside() {
 # --------------------------------------------------------------------------
 # 1. dependencies
 # --------------------------------------------------------------------------
-DEPS=(stow git-delta starship fzf zoxide mise direnv ripgrep fd bat tmux)
+# starship + mise are installed by their omnishell modules ('omnishell apply'),
+# not here.
+DEPS=(stow git-delta fzf zoxide direnv ripgrep fd bat tmux)
 
 install_deps() {
   if command -v brew >/dev/null 2>&1; then
@@ -69,15 +71,9 @@ install_deps() {
     for pkg in stow git-delta fzf zoxide direnv ripgrep fd-find bat tmux curl ca-certificates; do
       $SUDO apt-get install -y -qq "$pkg" >/dev/null 2>&1 || warn "apt: $pkg not installed"
     done
-    # starship/mise: not in Debian stable, and older than we want in Ubuntu.
-    # Install into ~/.local/bin so no sudo/TTY is needed (matters over SSH/CI).
-    if ! command -v starship >/dev/null 2>&1; then
-      curl -fsSL https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin" \
-        || warn "starship install failed (prompt falls back to the shell default)"
-    fi
-    if ! command -v mise >/dev/null 2>&1; then
-      curl -fsSL https://mise.run | sh || warn "mise install failed"
-    fi
+    # starship + mise are handled by their omnishell modules: 'omnishell apply'
+    # installs from apt/brew/pacman where available and falls back to a git +
+    # cargo build otherwise.
   else
     warn "no supported package manager found - install deps manually: ${DEPS[*]}"
   fi

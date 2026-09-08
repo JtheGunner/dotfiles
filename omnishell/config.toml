@@ -2,12 +2,14 @@
 # ~/.config/omnishell/config.toml by bootstrap.sh.
 #
 # omnishell owns everything that is an rc *line* (plugin inits, history/
-# completion options, tool activation). Files at a path (git config, tmux.conf,
-# starship.toml, ...) are handled by the stow packages in this repo instead.
+# completion options, tool activation), plus the starship prompt config it
+# seeds at ~/.config/omnishell/starship.toml. Standalone config *files* (git
+# config, tmux.conf, ghostty, ...) are handled by the stow packages in this repo.
 #
-# Tools planned as omnishell modules but not yet released (direnv, mise,
-# starship, colorized-man) are activated from ./shell.d/ for now and will move
-# here once those modules land upstream.
+# starship, mise and the Root Loops palette push are omnishell modules now
+# (enabled below). The Ghostty / Terminal.app colour themes are still rendered
+# from ./rootloops/ - omnishell's root-loops module only does the OSC shell push.
+# direnv is still activated from ./shell.d/60-tools.sh until we adopt its module.
 
 [omnishell]
 version = 1
@@ -43,3 +45,21 @@ cmd = "z"
 enabled = true
 [modules.modern-aliases.options]
 replace = ["ls", "cat", "find"]
+
+# Runtime version manager - `mise activate` per prompt (mode = "activate").
+[modules.mise]
+enabled = true
+
+# Prompt. Seeds ~/.config/omnishell/starship.toml (a curated single-line theme,
+# identical to what the old starship/ stow package shipped) on first shell start
+# and points STARSHIP_CONFIG at it; omnishell never overwrites it afterwards.
+[modules.starship]
+enabled = true
+
+# Push the Root Loops 16-colour palette to the terminal on shell start via
+# OSC 4/10/11 (replaces shell.d/95-rootloops-term.sh). "dark" forces the dark
+# variant, matching the palette that fragment always pushed.
+[modules.root-loops]
+enabled = true
+[modules.root-loops.options]
+appearance = "dark"

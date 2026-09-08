@@ -2,7 +2,7 @@
 # Apply the Root Loops palette to the DEFAULT GNOME Terminal / VTE profile via
 # gsettings (persistent, profile-level). Best-effort: silently does nothing if
 # gsettings or the GNOME Terminal schema is absent (KDE Konsole, xfce4-terminal,
-# etc. are still covered at runtime by shell.d/95-rootloops-term.sh).
+# etc. are still covered at runtime by omnishell's root-loops module).
 #
 # Run by rootloops/apply.sh on Linux.
 set -euo pipefail

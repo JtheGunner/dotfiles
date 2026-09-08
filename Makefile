@@ -2,7 +2,7 @@
 # Note: ~/.zshrc and ~/.bashrc are written by bootstrap.sh, not stow.
 
 DOTFILES := $(CURDIR)
-PACKAGES := zsh git tmux bat starship mise ghostty
+PACKAGES := zsh git tmux bat ghostty
 
 .PHONY: help
 help:
