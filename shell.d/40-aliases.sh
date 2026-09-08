@@ -10,3 +10,5 @@ alias ....='cd ../../..'
 
 alias week='date +%V'                 # current ISO week number
 alias serve='python3 -m http.server' # quick static file server
+
+alias ssh='ghostty +ssh --'

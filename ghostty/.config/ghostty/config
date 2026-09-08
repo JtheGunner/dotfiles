@@ -110,7 +110,16 @@ keybind = super+minus=decrease_font_size:1
 keybind = super+zero=reset_font_size
 
 keybind = super+v=paste_from_clipboard
-keybind = super+c=copy_to_clipboard
+
+# 1. Text wird sofort beim Markieren mit der Maus automatisch kopiert
+copy-on-select = clipboard
+
+# 2. Lösche die Standard-Kopierfunktion von super+c, um Blockaden zu lösen
+keybind = super+c=unbind
+
+# 3. Zwinge Ghostty, bei super+c (deinem physischen Ctrl+C) IMMER SIGINT zu senden
+keybind = super+c=text:\x03
+
 keybind = super+a=select_all
 keybind = super+k=clear_screen
 keybind = super+p=toggle_command_palette
