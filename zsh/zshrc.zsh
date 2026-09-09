@@ -33,6 +33,19 @@ export LC_ALL=en_US.UTF-8
 bindkey -e
 bindkey "^[[3~" delete-char   # <Delete> deletes forward instead of inserting ~
 
+# Modified arrow keys: word-wise motion, and never leak the raw CSI tail
+# (";3C", ";5D", ...) as literal text when a terminal sends an unbound sequence.
+# Modifier codes: 3 = Alt/Option, 5 = Ctrl.
+bindkey "^[[1;3C" forward-word      ; bindkey "^[[1;5C" forward-word
+bindkey "^[[1;3D" backward-word     ; bindkey "^[[1;5D" backward-word
+bindkey "^[[1;3H" beginning-of-line ; bindkey "^[[H" beginning-of-line
+bindkey "^[[1;3F" end-of-line       ; bindkey "^[[F" end-of-line
+bindkey "^[OH"   beginning-of-line  ; bindkey "^[[1~" beginning-of-line   # alt Home encodings
+bindkey "^[OF"   end-of-line        ; bindkey "^[[4~" end-of-line         # alt End encodings
+bindkey "^[[1;5H" beginning-of-line ; bindkey "^[[1;5F" end-of-line       # Ctrl+Home / Ctrl+End
+bindkey "^H"      backward-kill-word                                      # Ctrl+Backspace (^H)
+bindkey "^[[3;5~" kill-word         ; bindkey "^[[3;3~" kill-word         # Ctrl/Alt+Delete = kill word
+
 #------------------------------------------------------
 # Completion (zsh-native styling; omnishell's `completion` module handles the
 # case-insensitive matcher and compinit bootstrapping)
