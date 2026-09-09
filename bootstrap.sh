@@ -2,12 +2,17 @@
 # Bootstrap this dotfiles repo on a fresh machine.
 #
 #   git clone https://github.com/JtheGunner/dotfiles ~/.dotfiles
-#   ~/.dotfiles/bootstrap.sh
+#   ~/.dotfiles/bootstrap.sh [--yes]
+#
+# Run it from whichever checkout you want to be live - it stows from there. If a
+# previous run installed from a *different* checkout, it stops and asks before
+# repointing every stow link at this one; --yes (or DOTFILES_ASSUME_YES=1) skips
+# the prompt.
 #
 # What it does (idempotent - safe to re-run):
 #   1. install dependencies + omnishell + ghostty
 #   2. write real ~/.zshrc + ~/.bashrc that source this repo's rc libraries
-#   3. stow the config-file packages into $HOME
+#   3. stow the config-file packages into $HOME (repointing an older checkout)
 #   4. apply the version-controlled omnishell config (appends its marker block)
 #   5. append the shell.d block to both rc files
 #   6. render Root Loops colors + import the macOS Terminal.app profile
@@ -22,6 +27,22 @@ set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OS="$(uname -s)"
+
+# --yes / -y (or DOTFILES_ASSUME_YES=1): don't prompt - e.g. repoint stow links
+# from an older checkout to this one without asking.
+ASSUME_YES="${DOTFILES_ASSUME_YES:-${ASSUME_YES:-0}}"
+if [ -z "${BOOTSTRAP_SOURCE_ONLY:-}" ]; then
+  for _arg in "$@"; do
+    case "$_arg" in
+      -y | --yes) ASSUME_YES=1 ;;
+      -h | --help)
+        printf 'usage: %s [--yes]\n  --yes  assume "yes" for all prompts (repoint existing stow links to this checkout)\n' "$(basename "$0")"
+        exit 0 ;;
+      *) printf 'bootstrap.sh: unknown argument: %s\n' "$_arg" >&2; exit 2 ;;
+    esac
+  done
+  unset _arg
+fi
 
 # use sudo only when not root and it's available (CI / containers run as root)
 if [ "$(id -u)" -eq 0 ]; then SUDO=""
@@ -178,20 +199,94 @@ _realpath() {
   else ( cd "$(dirname "$1")" 2>/dev/null && printf '%s/%s\n' "$(pwd -P)" "$(basename "$1")" ); fi
 }
 
+# The first symlinked path component at or above $HOME - i.e. the link stow
+# actually created (a folded package dir, or the leaf link itself). Empty when
+# $1 reaches $HOME without crossing a symlink.
+_link_component() {
+  local p="$1"
+  while [ -n "$p" ] && [ "$p" != "$HOME" ] && [ "$p" != "/" ]; do
+    [ -L "$p" ] && { printf '%s\n' "$p"; return 0; }
+    p="$(dirname "$p")"
+  done
+  return 1
+}
+
+# yes/no on the controlling tty; auto-yes with --yes / DOTFILES_ASSUME_YES=1,
+# auto-no when there is no tty to ask (non-interactive => the safe choice)
+_confirm() {
+  [ "${ASSUME_YES:-0}" = "1" ] && return 0
+  local ans
+  { printf '%s [y/N] ' "$1" > /dev/tty && read -r ans < /dev/tty; } 2>/dev/null || return 1
+  case "$ans" in [yY] | [yY][eE][sS]) return 0 ;; *) return 1 ;; esac
+}
+
 stow_packages() {
   log "stowing: ${PACKAGES[*]}"
-  # Move aside any real file that would collide with a stow symlink. Skip
-  # anything that already resolves into $DOTFILES - on a re-run the target is
-  # either the stow symlink itself or a child of a folded stow dir.
-  local pkg rel target
+  local pkg rel target resolved suffix root link c self
+  local -a foreign_links=() foreign_roots=() real_collisions=()
+
+  # $DOTFILES with every symlink resolved - compare resolved paths to resolved
+  # paths, never a resolved path to a raw one (that mismatch was the old bug).
+  self="$(_realpath "$DOTFILES")"; [ -n "$self" ] || self="$DOTFILES"
+
+  # Classify every path a package would occupy:
+  #   - already a link into THIS checkout          -> nothing to do
+  #   - a link into ANOTHER dotfiles checkout       -> a prior install elsewhere
+  #   - a real file / unrelated symlink             -> genuine pre-existing config
   for pkg in "${PACKAGES[@]}"; do
     while IFS= read -r rel; do
       target="$HOME/$rel"
-      [ -e "$target" ] || continue
-      case "$(_realpath "$target")" in "$DOTFILES"/*) continue ;; esac
-      backup_aside "$target"
+      [ -e "$target" ] || [ -L "$target" ] || continue
+      resolved="$(_realpath "$target")"
+      suffix="/$pkg/$rel"
+      case "$resolved" in
+        "$self/$pkg/$rel")
+          continue ;;
+        *"$suffix")
+          root="${resolved%"$suffix"}"
+          if [ "$root" != "$self" ] && [ -f "$root/bootstrap.sh" ]; then
+            link="$(_link_component "$target")" || link="$target"
+            foreign_links+=("$link")
+            case " ${foreign_roots[*]:-} " in
+              *" $root "*) ;;
+              *) foreign_roots+=("$root") ;;
+            esac
+            continue
+          fi ;;
+      esac
+      real_collisions+=("$target")
     done < <(cd "$DOTFILES/$pkg" && find . -type f | sed 's|^\./||')
   done
+
+  # A previous install rooted at a different checkout: repoint it here, or stop.
+  if [ "${#foreign_roots[@]}" -gt 0 ]; then
+    warn "existing dotfiles install detected, linked from:"
+    printf '         %s\n' "${foreign_roots[@]}" >&2
+    warn "this run installs from: $DOTFILES"
+    if _confirm " repoint every stow link to $DOTFILES (removes the old links)?"; then
+      printf '%s\n' "${foreign_links[@]}" | sort -u | while IFS= read -r link; do
+        [ -n "$link" ] || continue
+        if [ -L "$link" ]; then
+          warn "removing old link $link"
+          rm "$link"
+        else
+          warn "expected a symlink at $link - leaving it for stow to report"
+        fi
+      done
+    else
+      warn "aborted. Re-run from that checkout, or pass --yes to repoint here."
+      exit 1
+    fi
+  fi
+
+  # Genuine pre-existing config in the way: move it aside so stow can take over.
+  if [ "${#real_collisions[@]}" -gt 0 ]; then
+    for c in "${real_collisions[@]}"; do
+      [ -e "$c" ] || [ -L "$c" ] || continue   # a folded parent may already be gone
+      backup_aside "$c"
+    done
+  fi
+
   ( cd "$DOTFILES" && stow --restow --target="$HOME" "${PACKAGES[@]}" )
 }
 
@@ -301,4 +396,5 @@ main() {
   log "done. Open a new shell (exec \$SHELL) to pick everything up."
 }
 
-main "$@"
+# BOOTSTRAP_SOURCE_ONLY=1 lets tests source the helpers without running anything.
+[ -n "${BOOTSTRAP_SOURCE_ONLY:-}" ] || main "$@"
