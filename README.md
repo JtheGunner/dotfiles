@@ -116,15 +116,15 @@ omnishell apply      # rewrites the generated init.<shell>; -y skips the prompt
 omnishell doctor     # check for drift / degraded modules
 ```
 
-| Module                                                            | What it does                                                                | Notable options                    |
-|-------------------------------------------------------------------|-----------------------------------------------------------------------------|------------------------------------|
-| `completion`, `history`, `autosuggestions`, `syntax-highlighting` | zsh/bash plugin baseline                                                    | `history.size = 50000`             |
-| `fzf`                                                             | key bindings + defaults                                                     | `ctrl_r`, `ctrl_t`, `default_opts` |
-| `zoxide`                                                          | smarter `cd`                                                                | `cmd = "z"`                        |
-| `modern-aliases`                                                  | `ls` / `cat` / `find` -> `eza` / `bat` / `fd`                               | `replace = [...]`                  |
-| `mise`                                                            | runtime version manager, `mise activate` per prompt                         | -                                  |
-| `starship`                                                        | prompt; seeds `~/.config/omnishell/starship.toml` once, never overwrites it | edit that file for prompt styling  |
-| `root-loops`                                                      | OSC 4/10/11 palette push on shell start                                     | `appearance = "dark"`              |
+| Module                                                            | What it does                                                                | Notable options                              |
+|-------------------------------------------------------------------|-----------------------------------------------------------------------------|----------------------------------------------|
+| `completion`, `history`, `autosuggestions`, `syntax-highlighting` | zsh/bash plugin baseline                                                    | `history.size = 50000`                       |
+| `fzf`                                                             | key bindings + defaults                                                     | `ctrl_r`, `ctrl_t`, `default_opts`           |
+| `zoxide`                                                          | smarter `cd`                                                                | `cmd = "z"`                                  |
+| `modern-aliases`                                                  | `ls` / `cat` / `find` -> `eza` / `bat` / `fd`                               | `replace = [...]`                            |
+| `mise`                                                            | runtime version manager, `mise activate` per prompt                         | -                                            |
+| `starship`                                                        | prompt; seeds `~/.config/omnishell/starship.toml` once, never overwrites it | edit that file for prompt styling            |
+| `root-loops`                                                      | OSC 4/10/11 palette push on shell start                                     | `appearance = "dark"`                        |
 | `tmux`                                                            | installs tmux; optional auto-attach to a session on shell start             | `session = "default"`, `auto_attach = false` |
 
 `starship`, `mise` and `tmux` are **installed** by `omnishell apply`, not by
@@ -143,7 +143,7 @@ adding or removing files in a package, run `make restow`.
 | Package    | Symlinks to                            | Contains                                                                                                                                                                                                    |
 |------------|----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `git/`     | `~/.config/git/{config,ignore}`        | identity, aliases (`st`, `co`, `lg`, `coi` = fzf branch switch), `main` default branch, global ignore. `delta` paging is `~/.gitconfig.local`, written by `bootstrap.sh` **only when `delta` is installed** |
-| `tmux/`    | `~/.tmux.conf`                         | prefix `C-a`, 1-based index, `\|` / `-` splits, mouse on, vi mode, Root-Loops-flavoured status bar (`prefix r` reloads) |
+| `tmux/`    | `~/.tmux.conf`                         | prefix `C-a`, 1-based index, `\|` / `-` splits, mouse on, vi mode, Root-Loops-flavoured status bar (`prefix r` reloads)                                                                                     |
 | `bat/`     | `~/.config/bat/config`                 | `--theme="ansi"` so `bat` / `delta` / fzf previews inherit the terminal palette                                                                                                                             |
 | `ghostty/` | `~/.config/ghostty/config` + `themes/` | primary terminal; `theme = light:rootloops-light,dark:rootloops-dark` follows the OS                                                                                                                        |
 | `nvim/`    | `~/.config/nvim/`                      | opt-in - only stowed if the directory exists                                                                                                                                                                |
