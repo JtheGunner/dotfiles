@@ -111,14 +111,18 @@ keybind = super+zero=reset_font_size
 
 keybind = super+v=paste_from_clipboard
 
-# 1. Text wird sofort beim Markieren mit der Maus automatisch kopiert
+# Auto-copy on mouse selection.
 copy-on-select = clipboard
 
-# 2. Lösche die Standard-Kopierfunktion von super+c, um Blockaden zu lösen
-keybind = super+c=unbind
+# Cmd+C = copy. SIGINT is the native Ctrl+C now: the physical Ctrl key stays a
+# real Control in terminals (Karabiner "PC-style Ctrl" excludes terminal bundles).
+# Ctrl+Shift+C from other apps arrives here as Cmd+C via Karabiner group 40.
+keybind = super+c=copy_to_clipboard
 
-# 3. Zwinge Ghostty, bei super+c (deinem physischen Ctrl+C) IMMER SIGINT zu senden
-keybind = super+c=text:\x03
+# Shift+Enter = newline (Claude Code, zsh, REPLs). Sent as literal bytes so it
+# works whether or not the kitty keyboard protocol is active - a Karabiner
+# key-injection rule cannot, because Ghostty would re-encode it as ESC[13u.
+keybind = shift+enter=text:\x1b\r
 
 keybind = super+a=select_all
 keybind = super+k=clear_screen
