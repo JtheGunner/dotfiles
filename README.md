@@ -95,7 +95,7 @@ shells. Add one with a numeric prefix for ordering and keep it `sh`-compatible
 | `10-infra.sh`       | kubectl / flux / terraform aliases + completion, `$KUBECONFIG` |
 | `20-docker.sh`      | docker `dk*` aliases (only if `docker` present)                |
 | `30-linuxbrew.sh`   | linuxbrew `shellenv` (Linux only)                              |
-| `40-aliases.sh`     | `ll`, `..` / `...`, `serve`, `ssh` -> `ghostty +ssh`           |
+| `40-aliases.sh`     | `ll`, `..` / `...`, `serve`                                    |
 | `41-functions.sh`   | `whatsonport`, `jwtdecode`, `img2pdf`                          |
 | `50-less-colors.sh` | coloured man pages (-> future omnishell `colorized-man`)       |
 | `60-tools.sh`       | `direnv` + `yazi` hooks (-> future omnishell modules)          |
