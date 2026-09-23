@@ -21,7 +21,12 @@ for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
   check "$name is a real file, not a symlink" "[ -f '$rc' ] && [ ! -L '$rc' ]"
   check "$name has one dotfiles:base block" "[ \"\$(count '# >>> dotfiles:base >>>' '$rc')\" = 1 ]"
   check "$name has one shell.d block" "[ \"\$(count '# >>> dotfiles >>>' '$rc')\" = 1 ]"
-  check "$name has one omnishell block" "[ \"\$(count '# >>> omnishell' '$rc')\" = 1 ]"
+  # omnishell only hooks shells that are installed
+  if [ "$name" = .bashrc ] || command -v zsh >/dev/null 2>&1; then
+    check "$name has one omnishell block" "[ \"\$(count '# >>> omnishell' '$rc')\" = 1 ]"
+  else
+    echo "   skip $name omnishell block (zsh not installed)"
+  fi
 done
 
 echo ">> stow links"

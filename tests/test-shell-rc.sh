@@ -41,8 +41,9 @@ for sh in $shells; do
     "usage: dsd <stack> [compose-file] rc=2" "$(in_shell 'dsd; echo "rc=$?"' | tr '\n' ' ' | sed 's/ $//')"
   expect "dsr without a stack prints usage and fails" \
     "usage: dsr <stack> rc=2" "$(in_shell 'dsr; echo "rc=$?"' | tr '\n' ' ' | sed 's/ $//')"
+  mkdir -p "$WORK/empty"   # a PATH with no docker on it, wherever docker lives
   expect "no docker helpers without docker" "absent" \
-    "$(PATH=/usr/bin:/bin "$sh" -c ". '$DOTFILES/shell.d/20-docker.sh'; command -v dsd >/dev/null && echo present || echo absent")"
+    "$(PATH="$WORK/empty" "$(command -v "$sh")" -c ". '$DOTFILES/shell.d/20-docker.sh'; command -v dsd >/dev/null && echo present || echo absent")"
 done
 
 if command -v zsh >/dev/null 2>&1; then

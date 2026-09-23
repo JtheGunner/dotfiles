@@ -53,6 +53,8 @@ jobs:
         run: |
           rm -rf "$HOME/.cargo/bin" "$HOME/.rustup"
           if command -v cargo; then echo "cargo still on PATH" >&2; exit 1; fi
+      - name: Install zsh (so both shells get wired up and checked)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
       - name: bootstrap.sh (first run)
         run: ./bootstrap.sh --yes
       - name: bootstrap.sh (re-run must be idempotent)
