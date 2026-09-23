@@ -6,12 +6,12 @@
 # seeds at ~/.config/omnishell/starship.toml. Standalone config *files* (git
 # config, tmux.conf, ghostty, ...) are handled by the stow packages in this repo.
 #
-# starship, mise, the Root Loops palette push and tmux are omnishell modules now
-# (enabled below): omnishell installs those packages and adds their rc lines. The
-# tmux *config file* (~/.tmux.conf) is still the ./tmux/ stow package. The
-# Ghostty / Terminal.app colour themes are still rendered from ./rootloops/ -
-# omnishell's root-loops module only does the OSC shell push. direnv is still
-# activated from ./shell.d/60-tools.sh until we adopt its module.
+# Tool activation (starship, mise, direnv, broot, tmux, ...) and the Root Loops
+# palette push are omnishell modules (enabled below): omnishell installs those
+# packages and adds their rc lines. The tmux *config file* (~/.tmux.conf) is
+# still the ./tmux/ stow package. The Ghostty / Terminal.app colour themes are
+# still rendered from ./rootloops/ - omnishell's root-loops module only does the
+# OSC shell push.
 
 [omnishell]
 version = 1
@@ -47,6 +47,20 @@ cmd = "z"
 enabled = true
 [modules.modern-aliases.options]
 replace = ["ls", "cat", "find"]
+
+# Syntax-highlighted man pages via bat; plain less colours when bat is missing.
+[modules.colorized-man]
+enabled = true
+
+# Per-directory environment from .envrc files.
+[modules.direnv]
+enabled = true
+
+# Directory-tree TUI; `br` opens it and cd's into the directory you pick.
+[modules.broot]
+enabled = true
+[modules.broot.options]
+cmd = "br"
 
 # Runtime version manager - `mise activate` per prompt (mode = "activate").
 [modules.mise]

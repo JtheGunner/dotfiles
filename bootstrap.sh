@@ -75,9 +75,9 @@ backup_aside() {
 # --------------------------------------------------------------------------
 # 1. dependencies
 # --------------------------------------------------------------------------
-# starship, mise + tmux are installed by their omnishell modules
+# starship, mise, tmux, direnv + broot are installed by their omnishell modules
 # ('omnishell apply'), not here.
-DEPS=(stow git-delta fzf zoxide direnv ripgrep fd bat)
+DEPS=(stow git-delta fzf zoxide ripgrep fd bat)
 
 install_deps() {
   if command -v brew >/dev/null 2>&1; then
@@ -89,12 +89,12 @@ install_deps() {
     # install one at a time so a single unavailable package doesn't sink the rest
     # (Debian names: fd -> fd-find, delta -> git-delta; bat/fd binaries are
     #  batcat/fdfind, which omnishell's modern-aliases module handles)
-    for pkg in stow git-delta fzf zoxide direnv ripgrep fd-find bat curl ca-certificates; do
+    for pkg in stow git-delta fzf zoxide ripgrep fd-find bat curl ca-certificates; do
       $SUDO apt-get install -y -qq "$pkg" >/dev/null 2>&1 || warn "apt: $pkg not installed"
     done
-    # starship, mise + tmux are handled by their omnishell modules: 'omnishell
-    # apply' installs from apt/brew/pacman where available (starship/mise fall
-    # back to a git + cargo build otherwise).
+    # starship, mise, tmux, direnv + broot are handled by their omnishell
+    # modules: 'omnishell apply' installs from apt/brew/pacman where available
+    # (and falls back to a git / cargo build otherwise).
   else
     warn "no supported package manager found - install deps manually: ${DEPS[*]}"
   fi
