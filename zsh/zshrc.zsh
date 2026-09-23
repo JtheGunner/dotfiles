@@ -47,13 +47,20 @@ bindkey "^H"      backward-kill-word                                      # Ctrl
 bindkey "^[[3;5~" kill-word         ; bindkey "^[[3;3~" kill-word         # Ctrl/Alt+Delete = kill word
 
 #------------------------------------------------------
-# Completion (zsh-native styling; omnishell's `completion` module handles the
-# case-insensitive matcher and compinit bootstrapping)
+# Completion (zsh-native styling; omnishell's `completion` module runs compinit
+# and sets the case-insensitive matcher)
 #------------------------------------------------------
 zmodload zsh/complist
-autoload -U compinit && compinit
-_comp_options+=(globdots)              # include dotfiles in completion
-setopt MENU_COMPLETE                   # highlight first match immediately
+# Include dotfiles in completion. compinit resets _comp_options and omnishell
+# runs it after this file, so append once, right before the first prompt.
+autoload -Uz add-zsh-hook
+_dotfiles_comp_globdots() {
+  _comp_options+=(globdots)
+  add-zsh-hook -d precmd _dotfiles_comp_globdots
+  unfunction _dotfiles_comp_globdots
+}
+add-zsh-hook precmd _dotfiles_comp_globdots
+setopt MENU_COMPLETE                  # highlight first match immediately
 setopt AUTO_LIST                       # list choices on ambiguous completion
 zstyle ':completion:*' menu select
 zstyle ':completion:*' complete-options true
