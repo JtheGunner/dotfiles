@@ -1,4 +1,4 @@
-<div style="text-align:center">
+<div style="text-align: center;">
 
 # 🐚 dotfiles
 
@@ -361,6 +361,6 @@ runs the same lint and tests (see [Development](#-development)).
 `ghostty/.config/ghostty/shaders/cursor_warp.glsl`, which keeps its upstream
 MIT notice.
 
-<div style="text-align:center">
+<div style="text-align: center;">
 <sub>One palette, two shells, zero hand-edited rc files.</sub>
 </div>
