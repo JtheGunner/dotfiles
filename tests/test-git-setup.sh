@@ -28,12 +28,14 @@ new_home() {
   cp "$DOTFILES/git/.config/git/config" "$HOME_DIR/.config/git/config"
 }
 
-# run bootstrap helpers non-interactively against $HOME_DIR
+# run bootstrap helpers non-interactively against $HOME_DIR. XDG_CONFIG_HOME is
+# pinned too: git reads $XDG_CONFIG_HOME/git/config instead of ~/.config/git/config
+# when it is set (as on GitHub's runners).
 run() {
-  HOME="$HOME_DIR" PATH="$WORK/bin" GIT_CONFIG_NOSYSTEM=1 ASSUME_YES=1 \
+  HOME="$HOME_DIR" XDG_CONFIG_HOME="$HOME_DIR/.config" PATH="$WORK/bin" GIT_CONFIG_NOSYSTEM=1 ASSUME_YES=1 \
     BOOTSTRAP_SOURCE_ONLY=1 "$BASH" -c ". '$DOTFILES/bootstrap.sh'; $1" >/dev/null 2>&1
 }
-git_in_home() { HOME="$HOME_DIR" GIT_CONFIG_NOSYSTEM=1 git "$@"; }
+git_in_home() { HOME="$HOME_DIR" XDG_CONFIG_HOME="$HOME_DIR/.config" GIT_CONFIG_NOSYSTEM=1 git "$@"; }
 
 echo ">> repo git config"
 check "ships no user.name / user.email" \
