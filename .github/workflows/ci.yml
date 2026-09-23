@@ -45,6 +45,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The runner ships cargo, so omnishell would build every tool Ubuntu
+      # doesn't package (starship, broot, ...) from source - far past the
+      # timeout. This job tests bootstrap.sh, not those builds: hide cargo and
+      # let omnishell report those modules as degraded, as on a stock machine.
+      - name: Hide the preinstalled Rust toolchain
+        run: |
+          rm -rf "$HOME/.cargo/bin" "$HOME/.rustup"
+          if command -v cargo; then echo "cargo still on PATH" >&2; exit 1; fi
       - name: bootstrap.sh (first run)
         run: ./bootstrap.sh --yes
       - name: bootstrap.sh (re-run must be idempotent)
