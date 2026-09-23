@@ -10,12 +10,19 @@ if command -v docker >/dev/null 2>&1; then
   alias dkrmac='docker rm $(docker ps -a -q)'     # remove all containers
   alias dkrmui='docker images -q -f dangling=true | xargs -r docker rmi'  # remove untagged images
   alias dkelc='docker exec -it $(docker ps -l -q) bash'  # enter last container
-  alias dsd='docker stack deploy "$1" -c /var/data/config/"$1"/"$1".yml'
-  alias dsr='docker stack rm "$1"'
-fi
 
-# NOTE: the old dotfiles aliased `git` itself to a git-in-docker container
-# (funkypenguin/git-docker) for hosts without git. That is dangerous with this
-# setup (which assumes a real git + delta) and is intentionally left disabled:
-#
-#   alias git='docker run -v $PWD:/var/data -v /var/data/git-docker/data/.ssh:/root/.ssh funkypenguin/git-docker git'
+  # Docker Swarm stacks, one compose file per stack:
+  #   $DOCKER_STACKS_DIR/<stack>/<stack>.yml
+  # The default follows the funkypenguin "Geek Cookbook" layout; override
+  # DOCKER_STACKS_DIR in ~/.<shell>rc.local.
+  #   dsd <stack> [compose-file]   deploy / update a stack
+  #   dsr <stack>                  remove a stack
+  dsd() {
+    [ -n "${1:-}" ] || { echo "usage: dsd <stack> [compose-file]" >&2; return 2; }
+    docker stack deploy "$1" -c "${2:-${DOCKER_STACKS_DIR:-/var/data/config}/$1/$1.yml}"
+  }
+  dsr() {
+    [ -n "${1:-}" ] || { echo "usage: dsr <stack>" >&2; return 2; }
+    docker stack rm "$1"
+  }
+fi
