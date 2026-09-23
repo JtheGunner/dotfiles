@@ -1,4 +1,4 @@
-<div align="center">
+<div style="text-align:center">
 
 # 🐚 dotfiles
 
@@ -20,13 +20,13 @@
 The setup is split across five layers. Each layer owns one kind of thing, so
 nothing is configured twice:
 
-| Layer                                                    | Owns                                                                                                                                                                                                                                            | Mechanism                                                                                                  |
-|----------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
-| **[omnishell](https://github.com/JtheGunner/omnishell)** | rc *lines*: plugin inits, history, completion, `fzf`, `zoxide`, `modern-aliases`, `colorized-man`, `direnv`, `broot`, `mise`, `starship` (prompt + its seeded config), `root-loops` (OSC palette push), `tmux` (installs it; auto-attach is off) | one marker block in `~/.zshrc` / `~/.bashrc`, sourcing a generated `init.<shell>`                          |
-| **this repo: stow packages**                             | standalone config *files*: `git`, `tmux` (`.tmux.conf` only), `bat`, `ghostty` (+ optional `nvim`)                                                                                                                                              | [GNU Stow](https://www.gnu.org/software/stow/) symlinks into `$HOME`                                       |
-| **this repo: rc libraries**                              | the base `~/.zshrc` / `~/.bashrc` content: env, keybindings, zsh completion styling                                                                                                                                                             | `zsh/zshrc.zsh` + `bash/bashrc.bash`, **`source`d** from a generated real rc file (not stowed, see below) |
-| **this repo: `shell.d/`**                                | personal rc lines not worth a public module: k8s / docker aliases, `linuxbrew`, helper functions                                                                                                                                                | a second marker block, sourced *after* omnishell                                                           |
-| **`~/.zshrc.local` / `~/.bashrc.local`**                 | machine-specific and secret: per-host `PATH`, tool completions, tokens. **Not version-controlled.**                                                                                                                                             | sourced last by the same marker block                                                                      |
+| Layer                                                    | Owns                                                                                                                                                                                                                                             | Mechanism                                                                                                 |
+|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| **[omnishell](https://github.com/JtheGunner/omnishell)** | rc *lines*: plugin inits, history, completion, `fzf`, `zoxide`, `modern-aliases`, `colorized-man`, `direnv`, `broot`, `mise`, `starship` (prompt + its seeded config), `root-loops` (OSC palette push), `tmux` (installs it; auto-attach is off) | one marker block in `~/.zshrc` / `~/.bashrc`, sourcing a generated `init.<shell>`                         |
+| **this repo: stow packages**                             | standalone config *files*: `git`, `tmux` (`.tmux.conf` only), `bat`, `ghostty` (+ optional `nvim`)                                                                                                                                               | [GNU Stow](https://www.gnu.org/software/stow/) symlinks into `$HOME`                                      |
+| **this repo: rc libraries**                              | the base `~/.zshrc` / `~/.bashrc` content: env, keybindings, zsh completion styling                                                                                                                                                              | `zsh/zshrc.zsh` + `bash/bashrc.bash`, **`source`d** from a generated real rc file (not stowed, see below) |
+| **this repo: `shell.d/`**                                | personal rc lines not worth a public module: k8s / docker aliases, `linuxbrew`, helper functions                                                                                                                                                 | a second marker block, sourced *after* omnishell                                                          |
+| **`~/.zshrc.local` / `~/.bashrc.local`**                 | machine-specific and secret: per-host `PATH`, tool completions, tokens. **Not version-controlled.**                                                                                                                                              | sourced last by the same marker block                                                                     |
 
 omnishell is consumed as a released binary (Homebrew tap / curl installer); this
 repo never modifies it.
@@ -50,7 +50,7 @@ export DOTFILES="$HOME/.dotfiles"
 ```
 
 omnishell and the `shell.d` block then *append* their marker blocks to those
-files. If the rc file were a stow symlink into the repo, those appends would be
+files. If the rc file were a stow symlink into the repo, this appends would be
 written straight back into version control, so bootstrap writes a real file that
 `source`s the repo's rc library instead.
 
@@ -126,14 +126,14 @@ Every setting lives in **one** of five places. None of this needs `bootstrap.sh`
 re-run (though re-running it is always safe); the "Apply with" column says how
 to pick up a change.
 
-|    | I want to change...                                                  | Edit                                                                     | Apply with                                   |
-|:--:|----------------------------------------------------------------------|--------------------------------------------------------------------------|----------------------------------------------|
-| 🐚 | base shell behaviour (env, keybindings, completion styling)          | `zsh/zshrc.zsh`, `bash/bashrc.bash`, or the `*-mac` / `*-linux` siblings | `exec $SHELL`                                |
-| 🧩 | a personal rc line (aliases, functions)                              | a file in `shell.d/`                                                     | `exec $SHELL`                                |
+|    | I want to change...                                                   | Edit                                                                     | Apply with                                   |
+|:--:|-----------------------------------------------------------------------|--------------------------------------------------------------------------|----------------------------------------------|
+| 🐚 | base shell behaviour (env, keybindings, completion styling)           | `zsh/zshrc.zsh`, `bash/bashrc.bash`, or the `*-mac` / `*-linux` siblings | `exec $SHELL`                                |
+| 🧩 | a personal rc line (aliases, functions)                               | a file in `shell.d/`                                                     | `exec $SHELL`                                |
 | 🔌 | a plugin / prompt / tool activation (fzf, direnv, broot, starship, …) | `omnishell/config.toml`                                                  | `omnishell apply`                            |
-| 📄 | a standalone program's config file (git, tmux, bat, ghostty, nvim)   | the matching stow package                                                | live immediately (symlinked); reload the app |
-| 🎨 | terminal colours                                                     | `rootloops/`, see [Colours](#-colours-root-loops)                        | `make colors`                                |
-| 🔒 | anything host-specific or secret                                     | `~/.zshrc.local` / `~/.bashrc.local` (**not** in the repo)               | `exec $SHELL`                                |
+| 📄 | a standalone program's config file (git, tmux, bat, ghostty, nvim)    | the matching stow package                                                | live immediately (symlinked); reload the app |
+| 🎨 | terminal colours                                                      | `rootloops/`, see [Colours](#-colours-root-loops)                        | `make colors`                                |
+| 🔒 | anything host-specific or secret                                      | `~/.zshrc.local` / `~/.bashrc.local` (**not** in the repo)               | `exec $SHELL`                                |
 
 ### 1. Base rc libraries: `zsh/`, `bash/`
 
@@ -152,18 +152,17 @@ block → `~/.<shell>rc.local`.
 ### 2. Personal rc fragments: `shell.d/*.sh`
 
 POSIX-`sh` snippets, sourced in filename order **after** omnishell, by both
-shells. Add one with a numeric prefix for ordering and keep it `sh`-compatible
-(`make lint` checks this).
+shells. Add one with a numeric prefix for ordering and keep it `sh`-compatible (`make lint` checks this).
 
-| File               | Purpose                                                                            |
-|--------------------|------------------------------------------------------------------------------------|
-| `00-path.sh`       | prepend `~/.local/bin`, `~/bin` to `PATH`                                          |
-| `10-infra.sh`      | `kubectl` / `flux` / `terraform` aliases + completion, `$KUBECONFIG`               |
+| File               | Purpose                                                                           |
+|--------------------|-----------------------------------------------------------------------------------|
+| `00-path.sh`       | prepend `~/.local/bin`, `~/bin` to `PATH`                                         |
+| `10-infra.sh`      | `kubectl` / `flux` / `terraform` aliases + completion, `$KUBECONFIG`              |
 | `20-docker.sh`     | docker `dk*` aliases, `dsd` / `dsr` Swarm stack helpers (only if `docker` exists) |
-| `30-linuxbrew.sh`  | linuxbrew `shellenv` (Linux only)                                                  |
-| `40-aliases.sh`    | `ll`, `..` / `...`, `week`, `serve`                                                |
-| `41-functions.sh`  | `whatsonport`, `jwtdecode`, `img2pdf`                                              |
-| `70-fzf-colors.sh` | **generated** by `rootloops/apply.sh`; don't hand-edit                             |
+| `30-linuxbrew.sh`  | linuxbrew `shellenv` (Linux only)                                                 |
+| `40-aliases.sh`    | `ll`, `..` / `...`, `week`, `serve`                                               |
+| `41-functions.sh`  | `whatsonport`, `jwtdecode`, `img2pdf`                                             |
+| `70-fzf-colors.sh` | **generated** by `rootloops/apply.sh`; don't hand-edit                            |
 
 `dsd <stack> [compose-file]` deploys a Docker Swarm stack from
 `$DOCKER_STACKS_DIR/<stack>/<stack>.yml` (default `/var/data/config`, the
@@ -197,8 +196,7 @@ omnishell doctor     # check for drift / degraded modules
 | `tmux`                                                            | installs tmux; optional auto-attach to a session on shell start             | `session = "default"`, `auto_attach = false` |
 
 `starship`, `mise`, `tmux`, `direnv` and `broot` are **installed** by
-`omnishell apply`, not by `bootstrap.sh`. Where a distro doesn't package one
-(e.g. `broot` / `starship` on Ubuntu 24.04), omnishell falls back to building it
+`omnishell apply`, not by `bootstrap.sh`. Where a distro doesn't package one (e.g. `broot` / `starship` on Ubuntu 24.04), omnishell falls back to building it
 and otherwise reports the module as *degraded*; the rest keeps working.
 
 Prompt styling is `~/.config/omnishell/starship.toml` (seeded once, then yours,
@@ -213,13 +211,13 @@ shells start outside it. Flip it to `true` to attach to (or create) the
 live config immediately** (you may still need to reload the target app). After
 adding or removing files in a package, run `make restow`.
 
-|    | Package    | Symlinks to                            | Contains                                                                                                                                        |
-|:--:|------------|----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+|    | Package    | Symlinks to                            | Contains                                                                                                                                          |
+|:--:|------------|----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
 | 🌿 | `git/`     | `~/.config/git/{config,ignore}`        | aliases (`st`, `co`, `lg`, `coi` = fzf branch switch), `main` default branch, global ignore; **no identity** (see [Git identity](#-git-identity)) |
-| 🪟 | `tmux/`    | `~/.tmux.conf`                         | prefix `C-a`, 1-based index, `\|` / `-` splits, mouse on, vi mode, Root-Loops-flavoured status bar (`prefix r` reloads)                         |
-| 🦇 | `bat/`     | `~/.config/bat/config`                 | `--theme="ansi"` so `bat` / `delta` / fzf previews inherit the terminal palette                                                                 |
-| 👻 | `ghostty/` | `~/.config/ghostty/config` + `themes/` | primary terminal; `theme = light:rootloops-light,dark:rootloops-dark` follows the OS                                                            |
-| 📝 | `nvim/`    | `~/.config/nvim/`                      | opt-in: only stowed if the directory exists                                                                                                     |
+| 🪟 | `tmux/`    | `~/.tmux.conf`                         | prefix `C-a`, 1-based index, `\|` / `-` splits, mouse on, vi mode, Root-Loops-flavoured status bar (`prefix r` reloads)                           |
+| 🦇 | `bat/`     | `~/.config/bat/config`                 | `--theme="ansi"` so `bat` / `delta` / fzf previews inherit the terminal palette                                                                   |
+| 👻 | `ghostty/` | `~/.config/ghostty/config` + `themes/` | primary terminal; `theme = light:rootloops-light,dark:rootloops-dark` follows the OS                                                              |
+| 📝 | `nvim/`    | `~/.config/nvim/`                      | opt-in: only stowed if the directory exists                                                                                                       |
 
 Stow a subset with `cd ~/.dotfiles && stow git tmux`; add an extra terminal
 package via `DOTFILES_TERMINALS="alacritty kitty" ./bootstrap.sh`.
@@ -238,7 +236,7 @@ overrides. Create it by hand; nothing generates it.
 ## 🎨 Colours: Root Loops
 
 Terminal colours are defined **once**; everything else inherits the 16 ANSI
-colours. See [`rootloops/`](rootloops/):
+colours. See [`rootloops`](rootloops):
 
 - [`rootloops/RECIPE`](rootloops/RECIPE): the canonical [rootloops.sh](https://rootloops.sh) recipe
 - [`rootloops/palette.env`](rootloops/palette.env): the 16 colours + fg/bg, **the dark source of truth**
@@ -250,16 +248,15 @@ colours. See [`rootloops/`](rootloops/):
 16 ANSI colours. The **OSC 4/10/11 palette push** to the running terminal is
 omnishell's `root-loops` module (`appearance = "dark"` in `omnishell/config.toml`).
 
-| Target                          | File                                                    | Notes                                                                                                                                                                              |
-|---------------------------------|---------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Ghostty**                     | `ghostty/.config/ghostty/themes/rootloops-{dark,light}` | The config sets `theme = light:rootloops-light,dark:rootloops-dark`, so Ghostty follows the OS appearance.                                                                        |
+| Target                          | File                                                    | Notes                                                                                                                                                                                    |
+|---------------------------------|---------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ghostty**                     | `ghostty/.config/ghostty/themes/rootloops-{dark,light}` | The config sets `theme = light:rootloops-light,dark:rootloops-dark`, so Ghostty follows the OS appearance.                                                                               |
 | Any OSC-capable terminal        | omnishell `root-loops` module                           | Pushes the **dark** palette on shell start (tmux-aware): VTE/GNOME Terminal, kitty, alacritty, wezterm, foot, konsole, xterm, iTerm2, Linux console. Keep it in sync with `palette.env`. |
-| GNOME Terminal (persistent)     | generated by `rootloops/gen-vte-terminal.sh`            | Writes the dark palette into the default GNOME Terminal profile via `gsettings`. Best-effort; run automatically by `apply.sh` on Linux.                                             |
-| macOS Terminal.app *(fallback)* | `rootloops/RootLoops.terminal`                          | Importable dark profile (`rootloops/gen-terminal-app.py`); `bootstrap.sh` imports it and sets it as default.                                                                       |
-| `fzf` UI chrome                 | `shell.d/70-fzf-colors.sh`                              | dark; doesn't inherit ANSI cleanly                                                                                                                                                 |
+| GNOME Terminal (persistent)     | generated by `rootloops/gen-vte-terminal.sh`            | Writes the dark palette into the default GNOME Terminal profile via `gsettings`. Best-effort; run automatically by `apply.sh` on Linux.                                                  |
+| macOS Terminal.app *(fallback)* | `rootloops/RootLoops.terminal`                          | Importable dark profile (`rootloops/gen-terminal-app.py`); `bootstrap.sh` imports it and sets it as default.                                                                             |
+| `fzf` UI chrome                 | `shell.d/70-fzf-colors.sh`                              | dark; doesn't inherit ANSI cleanly                                                                                                                                                       |
 
-Only Ghostty gets the light/dark pair; everything else uses the dark palette
-(they can't switch automatically anyway). `bat`, `tmux`, `git`/`delta` and
+Only Ghostty gets the light/dark pair; everything else uses the dark palette (they can't switch automatically anyway). `bat`, `tmux`, `git`/`delta` and
 `starship` inherit ANSI, so they need no generated file.
 
 **Change the theme:** edit `rootloops/RECIPE` + `rootloops/palette.env` (and
@@ -270,12 +267,12 @@ Only Ghostty gets the light/dark pair; everything else uses the dark palette
 
 ## 🧪 Development
 
-|    | Command           | What it does                                                                                        |
-|:--:|-------------------|-----------------------------------------------------------------------------------------------------|
-| 🔍 | `make lint`       | `bash -n` / `sh -n` / `zsh -n`, shellcheck (if installed), Python syntax, Terminal.app profile      |
-| 🧪 | `make test`       | `tests/test-*.sh` in a throwaway `$HOME` / `PATH`; safe to run on your own machine                  |
-| 📦 | `make stow-check` | dry-run stow against your real `$HOME` (reports conflicts, changes nothing)                         |
-| ✅ | `make check`      | all three                                                                                           |
+|    | Command           | What it does                                                                                   |
+|:--:|-------------------|------------------------------------------------------------------------------------------------|
+| 🔍 | `make lint`       | `bash -n` / `sh -n` / `zsh -n`, shellcheck (if installed), Python syntax, Terminal.app profile |
+| 🧪 | `make test`       | `tests/test-*.sh` in a throwaway `$HOME` / `PATH`; safe to run on your own machine             |
+| 📦 | `make stow-check` | dry-run stow against your real `$HOME` (reports conflicts, changes nothing)                    |
+| ✅ | `make check`      | all three                                                                                      |
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs `make lint test`
 on Ubuntu and macOS, bootstraps a fresh Ubuntu runner twice and checks the
@@ -329,6 +326,6 @@ runs the same lint and tests (see [Development](#-development)).
 `ghostty/.config/ghostty/shaders/cursor_warp.glsl`, which keeps its upstream
 MIT notice.
 
-<div align="center">
+<div style="text-align:center">
 <sub>One palette, two shells, zero hand-edited rc files.</sub>
 </div>
