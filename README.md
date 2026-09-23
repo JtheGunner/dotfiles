@@ -316,6 +316,13 @@ tests/                    test-*.sh (make test) + bootstrap-smoke.sh (CI)
 
 ---
 
+## 🤝 Contributing
+
+Issues and pull requests are welcome. Run `make check` before opening a PR — CI
+runs the same lint and tests (see [Development](#-development)).
+
+---
+
 ## 📜 License
 
 [MIT](LICENSE) for everything in this repo, except
