@@ -4,15 +4,17 @@
 #   git clone https://github.com/JtheGunner/dotfiles ~/.dotfiles
 #   ~/.dotfiles/bootstrap.sh [--yes]
 #
-# Run it from whichever checkout you want to be live - it stows from there. If a
-# previous run installed from a *different* checkout, it stops and asks before
-# repointing every stow link at this one; --yes (or DOTFILES_ASSUME_YES=1) skips
-# the prompt.
+# Run it from whichever checkout you want to be live - it installs from there.
+# Before changing anything it checks every reference to a checkout (the DOTFILES=
+# path in the ~/.zshrc / ~/.bashrc base blocks and every stow link). If any points
+# at a *different* checkout, it lists them and asks once whether to switch
+# everything to this one; --yes (or DOTFILES_ASSUME_YES=1) answers yes.
 #
 # What it does (idempotent - safe to re-run):
+#   0. check that rc files + stow links all point at this checkout
 #   1. install dependencies + omnishell + ghostty
 #   2. write real ~/.zshrc + ~/.bashrc that source this repo's rc libraries
-#   3. stow the config-file packages into $HOME (repointing an older checkout)
+#   3. stow the config-file packages into $HOME
 #   4. apply the version-controlled omnishell config (appends its marker block)
 #   5. append the shell.d block to both rc files
 #   6. render Root Loops colors + import the macOS Terminal.app profile
@@ -28,15 +30,15 @@ set -euo pipefail
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OS="$(uname -s)"
 
-# --yes / -y (or DOTFILES_ASSUME_YES=1): don't prompt - e.g. repoint stow links
-# from an older checkout to this one without asking.
+# --yes / -y (or DOTFILES_ASSUME_YES=1): don't prompt - e.g. switch rc files and
+# stow links from another checkout to this one without asking.
 ASSUME_YES="${DOTFILES_ASSUME_YES:-${ASSUME_YES:-0}}"
 if [ -z "${BOOTSTRAP_SOURCE_ONLY:-}" ]; then
   for _arg in "$@"; do
     case "$_arg" in
       -y | --yes) ASSUME_YES=1 ;;
       -h | --help)
-        printf 'usage: %s [--yes]\n  --yes  assume "yes" for all prompts (repoint existing stow links to this checkout)\n' "$(basename "$0")"
+        printf 'usage: %s [--yes]\n  --yes  assume "yes" for all prompts (switch rc files + stow links from another checkout to this one)\n' "$(basename "$0")"
         exit 0 ;;
       *) printf 'bootstrap.sh: unknown argument: %s\n' "$_arg" >&2; exit 2 ;;
     esac
@@ -165,12 +167,61 @@ install_omnishell() {
 # --------------------------------------------------------------------------
 # 2. real rc files that source this repo's rc libraries
 # --------------------------------------------------------------------------
+# rc file (relative to $HOME) : the rc library its base block sources
+RC_BASES=(".zshrc:zsh/zshrc.zsh" ".bashrc:bash/bashrc.bash")
+
+# the dotfiles:base block that points an rc file at this checkout
+_rc_base_block() {
+  cat <<EOF
+# >>> dotfiles:base >>>
+export DOTFILES="$DOTFILES"
+[ -r "\$DOTFILES/$1" ] && . "\$DOTFILES/$1"
+# <<< dotfiles:base <<<
+EOF
+}
+
+# the DOTFILES= path inside an rc file's base block; empty without a block
+_rc_base_path() {
+  [ -f "$1" ] || return 0
+  awk '/^# >>> dotfiles:base >>>$/ { inside = 1; next }
+       /^# <<< dotfiles:base <<<$/ { inside = 0; next }
+       inside && /^export DOTFILES=/ {
+         sub(/^export DOTFILES="?/, ""); sub(/"?[[:space:]]*$/, ""); print; exit
+       }' "$1"
+}
+
+# Swap an existing base block for one pointing at this checkout. Only the lines
+# between the markers change - the rest of the file is kept byte for byte (head
+# and tail, not awk, so a missing final newline survives too).
+_replace_rc_base() {
+  local rc="$1" lib="$2" start end backup tmp
+  start="$(grep -n -m1 '^# >>> dotfiles:base >>>$' "$rc" | cut -d: -f1)"
+  end="$(awk -v s="$start" 'NR > s && /^# <<< dotfiles:base <<<$/ { print NR; exit }' "$rc")"
+  if [ -z "$start" ] || [ -z "$end" ]; then
+    warn "$rc: dotfiles:base block has no end marker - fix it by hand"
+    exit 1
+  fi
+  backup="$rc.pre-dotfiles.$(date +%Y%m%dT%H%M%S)"
+  warn "backing up $rc -> $backup"
+  cp -p "$rc" "$backup"
+  tmp="$(mktemp)"
+  {
+    if [ "$start" -gt 1 ]; then head -n "$((start - 1))" "$rc"; fi   # BSD head rejects -n 0
+    _rc_base_block "$lib"
+    tail -n "+$((end + 1))" "$rc"
+  } > "$tmp"
+  cat "$tmp" > "$rc"   # rewrite in place: keeps the inode and permissions
+  rm -f "$tmp"
+  log "pointed $(basename "$rc") at $DOTFILES"
+}
+
 write_rc_base() {
-  _base() {
-    local rc="$1" lib="$2"
-    if [ -f "$rc" ] && grep -q '# >>> dotfiles:base >>>' "$rc"; then
+  local entry rc lib
+  for entry in "${RC_BASES[@]}"; do
+    rc="$HOME/${entry%%:*}" lib="${entry#*:}"
+    if [ -f "$rc" ] && grep -q '^# >>> dotfiles:base >>>$' "$rc"; then
       log "$(basename "$rc") base block already present"
-      return 0
+      continue
     fi
     if [ -e "$rc" ] && [ ! -L "$rc" ]; then
       backup_aside "$rc"
@@ -178,15 +229,8 @@ write_rc_base() {
       rm -f "$rc"   # drop a stale symlink from an earlier layout
     fi
     log "writing $rc"
-    cat > "$rc" <<EOF
-# >>> dotfiles:base >>>
-export DOTFILES="$DOTFILES"
-[ -r "\$DOTFILES/$lib" ] && . "\$DOTFILES/$lib"
-# <<< dotfiles:base <<<
-EOF
-  }
-  _base "$HOME/.zshrc"  "zsh/zshrc.zsh"
-  _base "$HOME/.bashrc" "bash/bashrc.bash"
+    _rc_base_block "$lib" > "$rc"
+  done
 }
 
 # --------------------------------------------------------------------------
@@ -211,81 +255,161 @@ _link_component() {
   return 1
 }
 
-# yes/no on the controlling tty; auto-yes with --yes / DOTFILES_ASSUME_YES=1,
-# auto-no when there is no tty to ask (non-interactive => the safe choice)
+# collapse . and .. in an absolute path without touching the filesystem
+_normalize_path() {
+  local part out=""
+  local -a parts=() kept=()
+  IFS=/ read -r -a parts <<< "$1"
+  for part in ${parts[@]+"${parts[@]}"}; do
+    case "$part" in
+      '' | .) ;;
+      ..) if [ "${#kept[@]}" -gt 0 ]; then unset "kept[$((${#kept[@]} - 1))]"; fi ;;
+      *) kept+=("$part") ;;
+    esac
+  done
+  for part in ${kept[@]+"${kept[@]}"}; do out="$out/$part"; done
+  printf '%s\n' "${out:-/}"
+}
+
+# where a symlink points, as an absolute path - even when the target is gone
+_link_target() {
+  local link="$1" to dir
+  to="$(readlink "$link")" || return 1
+  case "$to" in
+    /*) ;;
+    *) dir="$(cd "$(dirname "$link")" && pwd -P)" || return 1; to="$dir/$to" ;;
+  esac
+  _normalize_path "$to"
+}
+
+# yes/no on the controlling tty (DOTFILES_TTY overrides it, for tests); auto-yes
+# with --yes / DOTFILES_ASSUME_YES=1, auto-no when there is no tty to ask
+# (non-interactive => the safe choice)
 _confirm() {
   [ "${ASSUME_YES:-0}" = "1" ] && return 0
-  local ans
-  { printf '%s [y/N] ' "$1" > /dev/tty && read -r ans < /dev/tty; } 2>/dev/null || return 1
+  local ans tty="${DOTFILES_TTY:-/dev/tty}"
+  { printf '%s [y/N] ' "$1" >> "$tty" && read -r ans < "$tty"; } 2>/dev/null || return 1
   case "$ans" in [yY] | [yY][eE][sS]) return 0 ;; *) return 1 ;; esac
+}
+
+# Classify every path a stow package would occupy:
+#   - already a link into THIS checkout             -> nothing to do
+#   - a link into ANOTHER checkout (even a deleted one) -> FOREIGN_LINKS / _ROOTS
+#   - a real file / unrelated symlink               -> REAL_COLLISIONS
+# FOREIGN_LINKS[i] is the link stow created (a folded dir or the leaf itself),
+# FOREIGN_ROOTS[i] the checkout it points into.
+scan_stow_links() {
+  local pkg rel target resolved suffix root link self i known
+  FOREIGN_LINKS=() FOREIGN_ROOTS=() REAL_COLLISIONS=()
+
+  # $DOTFILES with every symlink resolved - compare resolved paths to resolved
+  # paths, never a resolved path to a raw one.
+  self="$(_realpath "$DOTFILES")" || self=""; [ -n "$self" ] || self="$DOTFILES"
+
+  for pkg in "${PACKAGES[@]}"; do
+    while IFS= read -r rel; do
+      target="$HOME/$rel"
+      root=""
+      if [ -e "$target" ]; then
+        resolved="$(_realpath "$target")" || resolved=""
+        suffix="/$pkg/$rel"
+        [ "$resolved" = "$self$suffix" ] && continue
+        case "$resolved" in
+          *"$suffix")
+            root="${resolved%"$suffix"}"
+            [ "$root" != "$self" ] && [ -f "$root/bootstrap.sh" ] || root="" ;;
+        esac
+        link="$(_link_component "$target")" || link="$target"
+      else
+        # nothing there, or a dangling link: a link into a checkout that is gone
+        link="$(_link_component "$target")" || continue
+        [ ! -e "$link" ] || continue
+        resolved="$(_link_target "$link")" || resolved=""
+        suffix="/$pkg/${link#"$HOME/"}"
+        case "$resolved" in
+          *"$suffix") root="${resolved%"$suffix"}"; [ ! -e "$root" ] || root="" ;;
+        esac
+        [ -n "$root" ] || [ "$link" = "$target" ] || continue
+      fi
+
+      if [ -z "$root" ]; then
+        REAL_COLLISIONS+=("$target")
+        continue
+      fi
+      known=0
+      for ((i = 0; i < ${#FOREIGN_LINKS[@]}; i++)); do
+        [ "${FOREIGN_LINKS[$i]}" = "$link" ] && { known=1; break; }
+      done
+      [ "$known" = 1 ] || { FOREIGN_LINKS+=("$link"); FOREIGN_ROOTS+=("$root"); }
+    done < <(cd "$DOTFILES/$pkg" && find . -type f | sed 's|^\./||')
+  done
+}
+
+# ~/-relative form of a path under $HOME, for messages
+_tilde() { case "$1" in "$HOME"/*) printf '%s%s\n' '~' "${1#"$HOME"}" ;; *) printf '%s\n' "$1" ;; esac; }
+_missing_mark() { [ -e "$1" ] || printf ' (missing)'; }
+
+# Every run checks ALL references to a checkout - the DOTFILES= path in both rc
+# base blocks and every stow link - before anything is written. If any of them
+# points at another checkout, list them and ask once whether to switch
+# everything to this one; "no" (or no tty) exits without changing anything.
+check_checkout_consistency() {
+  local self entry rc lib path resolved i
+  local -a refs=() stale_rcs=()
+
+  self="$(_realpath "$DOTFILES")" || self=""; [ -n "$self" ] || self="$DOTFILES"
+
+  for entry in "${RC_BASES[@]}"; do
+    rc="$HOME/${entry%%:*}"
+    path="$(_rc_base_path "$rc")"
+    [ -n "$path" ] || continue
+    resolved="$(_realpath "$path")" || resolved=""
+    [ "$resolved" = "$self" ] && continue
+    stale_rcs+=("$entry")
+    refs+=("$(_tilde "$rc") (dotfiles:base)  ->  $path$(_missing_mark "$path")")
+  done
+
+  scan_stow_links
+  for ((i = 0; i < ${#FOREIGN_LINKS[@]}; i++)); do
+    refs+=("$(_tilde "${FOREIGN_LINKS[$i]}")  ->  ${FOREIGN_ROOTS[$i]}$(_missing_mark "${FOREIGN_ROOTS[$i]}")")
+  done
+
+  [ "${#refs[@]}" -gt 0 ] || return 0
+
+  warn "references to another dotfiles checkout:"
+  printf '         %s\n' "${refs[@]}" >&2
+  warn "this run installs from: $DOTFILES"
+  if ! _confirm " switch everything to $DOTFILES?"; then
+    warn "aborted, nothing changed. Re-run from that checkout, or pass --yes to switch to this one."
+    exit 1
+  fi
+
+  for entry in ${stale_rcs[@]+"${stale_rcs[@]}"}; do
+    rc="$HOME/${entry%%:*}" lib="${entry#*:}"
+    _replace_rc_base "$rc" "$lib"
+  done
+  for ((i = 0; i < ${#FOREIGN_LINKS[@]}; i++)); do
+    warn "removing old link ${FOREIGN_LINKS[$i]} (stow re-links it)"
+    rm "${FOREIGN_LINKS[$i]}"
+  done
 }
 
 stow_packages() {
   log "stowing: ${PACKAGES[*]}"
-  local pkg rel target resolved suffix root link c self
-  local -a foreign_links=() foreign_roots=() real_collisions=()
+  local c
+  scan_stow_links
 
-  # $DOTFILES with every symlink resolved - compare resolved paths to resolved
-  # paths, never a resolved path to a raw one (that mismatch was the old bug).
-  self="$(_realpath "$DOTFILES")"; [ -n "$self" ] || self="$DOTFILES"
-
-  # Classify every path a package would occupy:
-  #   - already a link into THIS checkout          -> nothing to do
-  #   - a link into ANOTHER dotfiles checkout       -> a prior install elsewhere
-  #   - a real file / unrelated symlink             -> genuine pre-existing config
-  for pkg in "${PACKAGES[@]}"; do
-    while IFS= read -r rel; do
-      target="$HOME/$rel"
-      [ -e "$target" ] || [ -L "$target" ] || continue
-      resolved="$(_realpath "$target")"
-      suffix="/$pkg/$rel"
-      case "$resolved" in
-        "$self/$pkg/$rel")
-          continue ;;
-        *"$suffix")
-          root="${resolved%"$suffix"}"
-          if [ "$root" != "$self" ] && [ -f "$root/bootstrap.sh" ]; then
-            link="$(_link_component "$target")" || link="$target"
-            foreign_links+=("$link")
-            case " ${foreign_roots[*]:-} " in
-              *" $root "*) ;;
-              *) foreign_roots+=("$root") ;;
-            esac
-            continue
-          fi ;;
-      esac
-      real_collisions+=("$target")
-    done < <(cd "$DOTFILES/$pkg" && find . -type f | sed 's|^\./||')
-  done
-
-  # A previous install rooted at a different checkout: repoint it here, or stop.
-  if [ "${#foreign_roots[@]}" -gt 0 ]; then
-    warn "existing dotfiles install detected, linked from:"
-    printf '         %s\n' "${foreign_roots[@]}" >&2
-    warn "this run installs from: $DOTFILES"
-    if _confirm " repoint every stow link to $DOTFILES (removes the old links)?"; then
-      printf '%s\n' "${foreign_links[@]}" | sort -u | while IFS= read -r link; do
-        [ -n "$link" ] || continue
-        if [ -L "$link" ]; then
-          warn "removing old link $link"
-          rm "$link"
-        else
-          warn "expected a symlink at $link - leaving it for stow to report"
-        fi
-      done
-    else
-      warn "aborted. Re-run from that checkout, or pass --yes to repoint here."
-      exit 1
-    fi
+  # check_checkout_consistency already removed these (or stopped the run)
+  if [ "${#FOREIGN_LINKS[@]}" -gt 0 ]; then
+    warn "stow links into another checkout remain: ${FOREIGN_LINKS[*]}"
+    exit 1
   fi
 
   # Genuine pre-existing config in the way: move it aside so stow can take over.
-  if [ "${#real_collisions[@]}" -gt 0 ]; then
-    for c in "${real_collisions[@]}"; do
-      [ -e "$c" ] || [ -L "$c" ] || continue   # a folded parent may already be gone
-      backup_aside "$c"
-    done
-  fi
+  for c in ${REAL_COLLISIONS[@]+"${REAL_COLLISIONS[@]}"}; do
+    [ -e "$c" ] || [ -L "$c" ] || continue   # a folded parent may already be gone
+    backup_aside "$c"
+  done
 
   ( cd "$DOTFILES" && stow --restow --target="$HOME" "${PACKAGES[@]}" )
 }
@@ -420,6 +544,7 @@ setup_terminal_app() {
 }
 
 main() {
+  check_checkout_consistency
   install_deps
   install_ghostty
   install_omnishell

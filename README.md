@@ -66,22 +66,57 @@ exec $SHELL
 
 `bootstrap.sh`:
 
-1. installs dependencies, omnishell and Ghostty
-2. writes real `~/.zshrc` / `~/.bashrc`
-3. stows the packages
-4. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
-5. applies `omnishell/config.toml`, which also installs `starship`, `mise`, `tmux`, `direnv` and `broot`
-6. appends the `shell.d` block to both rc files
-7. renders the terminal colour themes
+1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
+2. installs dependencies, omnishell and Ghostty
+3. writes real `~/.zshrc` / `~/.bashrc`
+4. stows the packages
+5. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
+6. applies `omnishell/config.toml`, which also installs `starship`, `mise`, `tmux`, `direnv` and `broot`
+7. appends the `shell.d` block to both rc files
+8. renders the terminal colour themes
 
 It never runs `chsh`, and re-running it is safe. An existing handwritten
 `~/.zshrc` is moved to `~/.zshrc.pre-dotfiles` first. Pass `--yes` to answer every
 prompt with "yes" (and skip the identity prompt).
 
 > [!TIP]
-> Run it from whichever checkout you want to be live: it stows from there. If a
-> previous run installed from a *different* checkout, it asks before repointing
-> every stow link.
+> Run it from whichever checkout you want to be live: it installs from there. If
+> the rc files or stow links point at a *different* checkout, it asks once before
+> switching everything over.
+
+### Multiple checkouts
+
+Several clones on one machine are fine, e.g. a working copy to hack on and a
+second one to test the install end to end. Only one of them is live. Two things
+reference it:
+
+| | Reference | Written by |
+| :-: | --- | --- |
+| 📄 | `export DOTFILES="…"` in the `dotfiles:base` block of `~/.zshrc` / `~/.bashrc` | step 3 |
+| 🔗 | every stow symlink (`~/.tmux.conf`, `~/.config/ghostty`, …) | step 4 |
+
+Every run checks **both** before it changes anything. Paths are compared after
+resolving symlinks. If any reference points at another checkout, it lists each
+one with its target (a deleted checkout is marked `(missing)`) and asks a single
+question:
+
+```text
+ warn: references to another dotfiles checkout:
+         ~/.zshrc (dotfiles:base)  ->  /Users/me/Projects/dotfiles
+         ~/.bashrc (dotfiles:base)  ->  /Users/me/Projects/dotfiles
+         ~/.tmux.conf  ->  /Users/me/old-dotfiles (missing)
+ warn: this run installs from: /Users/me/Git/dotfiles
+ switch everything to /Users/me/Git/dotfiles? [y/N]
+```
+
+- **yes:** only the `dotfiles:base` blocks are rewritten (a backup
+  `~/.zshrc.pre-dotfiles.<timestamp>` comes first; the omnishell block, the
+  `shell.d` block and your own lines stay untouched), the old stow links are
+  removed and stow re-links them here.
+- **no**, or no terminal to ask: it exits with status 1 and changes nothing.
+
+To move to another checkout, run `./bootstrap.sh` from it and answer yes, or
+pass `--yes` (`DOTFILES_ASSUME_YES=1`) to switch without asking.
 
 ### Manual / partial
 
