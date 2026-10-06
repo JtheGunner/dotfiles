@@ -12,7 +12,8 @@
 #
 # What it does (idempotent - safe to re-run):
 #   0. check that rc files + stow links all point at this checkout
-#   1. install dependencies + omnishell + ghostty
+#   1. install dependencies + omnishell (>= 0.3.0, upgraded if older) + ghostty;
+#      on apt systems also a Rust toolchain for omnishell's git + cargo fallbacks
 #   2. write real ~/.zshrc + ~/.bashrc that source this repo's rc libraries
 #   3. stow the config-file packages into $HOME
 #   4. apply the version-controlled omnishell config (appends its marker block)
@@ -63,8 +64,34 @@ for t in ${DOTFILES_TERMINALS:-}; do
 done
 [ -d "$DOTFILES/nvim" ] && PACKAGES+=(nvim)
 
+# omnishell 0.3.0 introduced the modules omnishell/config.toml enables (starship,
+# root-loops, tmux, broot, direnv, mise, colorized-man); older releases ignore
+# them with a warning. starship, broot and mise build with edition 2024, which
+# needs Rust 1.85 - newer than what Debian / Ubuntu LTS ship as `cargo`.
+OMNISHELL_MIN_VERSION="0.3.0"
+RUST_MIN_VERSION="1.85"
+
+# output of the last `omnishell apply`, for the degraded-module summary at the end
+APPLY_REPORT=""
+
 log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m warn:\033[0m %s\n' "$*" >&2; }
+
+# true when dotted version $1 >= $2: numeric per field, missing fields count as 0,
+# a trailing suffix such as "-rc1" is ignored
+_version_ge() {
+  local -a a=() b=()
+  local i x y
+  IFS=. read -r -a a <<< "${1#v}"
+  IFS=. read -r -a b <<< "${2#v}"
+  for ((i = 0; i < ${#a[@]} || i < ${#b[@]}; i++)); do
+    x="${a[i]:-0}"; x="${x%%[!0-9]*}"
+    y="${b[i]:-0}"; y="${y%%[!0-9]*}"
+    if ((10#${x:-0} > 10#${y:-0})); then return 0; fi
+    if ((10#${x:-0} < 10#${y:-0})); then return 1; fi
+  done
+  return 0
+}
 
 # move a path aside without ever clobbering an existing backup
 backup_aside() {
@@ -91,12 +118,14 @@ install_deps() {
     # install one at a time so a single unavailable package doesn't sink the rest
     # (Debian names: fd -> fd-find, delta -> git-delta; bat/fd binaries are
     #  batcat/fdfind, which omnishell's modern-aliases module handles)
-    for pkg in stow git-delta fzf zoxide ripgrep fd-find bat curl ca-certificates; do
+    for pkg in stow git-delta fzf zoxide ripgrep fd-find bat curl ca-certificates build-essential; do
       $SUDO apt-get install -y -qq "$pkg" >/dev/null 2>&1 || warn "apt: $pkg not installed"
     done
     # starship, mise, tmux, direnv + broot are handled by their omnishell
     # modules: 'omnishell apply' installs from apt/brew/pacman where available
-    # (and falls back to a git / cargo build otherwise).
+    # and otherwise falls back to a git + cargo build - which needs a recent Rust
+    # toolchain (and the C toolchain from build-essential) to be there already.
+    ensure_rust_toolchain
   else
     warn "no supported package manager found - install deps manually: ${DEPS[*]}"
   fi
@@ -150,17 +179,56 @@ install_ghostty() {
   fi
 }
 
+# Rust >= $RUST_MIN_VERSION via rustup, for omnishell's git + cargo fallbacks. The
+# distro cargo (1.75 on Ubuntu 24.04) is too old to build starship / broot / mise.
+# Only touches machines where cargo is missing or too old; --no-modify-path keeps
+# rustup out of the shell rc files (omnishell installs the built binaries itself).
+ensure_rust_toolchain() {
+  export PATH="$HOME/.cargo/bin:$PATH"
+  local ver
+  ver="$(cargo --version 2>/dev/null | awk '{print $2}' || true)"   # no cargo: empty, not a pipefail abort
+  if [ -n "$ver" ] && _version_ge "$ver" "$RUST_MIN_VERSION"; then
+    return 0
+  fi
+  if command -v rustup >/dev/null 2>&1; then
+    log "updating the Rust toolchain (rustup; need >= $RUST_MIN_VERSION, have ${ver:-none})"
+    rustup update stable || warn "rustup update failed - starship / broot / mise may not build"
+    return 0
+  fi
+  command -v curl >/dev/null 2>&1 || { warn "curl missing - cannot install Rust; starship / broot / mise may not build"; return 0; }
+  log "installing the Rust toolchain (rustup; need >= $RUST_MIN_VERSION, have ${ver:-none})"
+  curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs \
+    | sh -s -- -y --profile minimal --no-modify-path \
+    || warn "rustup install failed - starship / broot / mise may not build"
+}
+
+_omnishell_version() {
+  omnishell version 2>/dev/null | awk 'NR == 1 { sub(/^v/, "", $1); print $1 }' || true
+}
+
 install_omnishell() {
+  local ver
   if command -v omnishell >/dev/null 2>&1; then
-    log "omnishell already installed ($(omnishell version 2>/dev/null || echo '?'))"
-    return
+    ver="$(_omnishell_version)"
+    if [ -z "$ver" ] || _version_ge "$ver" "$OMNISHELL_MIN_VERSION"; then
+      log "omnishell already installed ($(omnishell version 2>/dev/null || echo '?'))"
+      return
+    fi
+    warn "omnishell $ver is below the minimum $OMNISHELL_MIN_VERSION - upgrading"
   fi
   if command -v brew >/dev/null 2>&1; then
     log "installing omnishell via Homebrew tap"
-    brew install jthegunner/tap/omnishell
+    brew upgrade jthegunner/tap/omnishell 2>/dev/null || brew install jthegunner/tap/omnishell
   else
     log "installing omnishell via curl installer"
     curl -fsSL https://raw.githubusercontent.com/JtheGunner/omnishell/main/install.sh | sh
+  fi
+  hash -r
+  ver="$(_omnishell_version)"
+  if [ -n "$ver" ] && ! _version_ge "$ver" "$OMNISHELL_MIN_VERSION"; then
+    warn "omnishell $ver is still below the minimum $OMNISHELL_MIN_VERSION."
+    warn "another omnishell earlier on PATH ($(command -v omnishell)) may shadow the new one - remove or update it and re-run."
+    exit 1
   fi
 }
 
@@ -489,12 +557,46 @@ apply_omnishell() {
   omnishell init -y 2>/dev/null || omnishell init || true
   cp "$DOTFILES/omnishell/config.toml" "$cfgdir/config.toml"   # init may template a fresh one
   # exit 1 = degraded module(s) (e.g. eza is not in Debian stable) - a state, not
-  # a crash; keep going. exit >=2 = config/other error - abort.
-  omnishell apply -y || {
-    local rc=$?
-    [ "$rc" -eq 1 ] || { warn "omnishell apply failed (exit $rc)"; exit "$rc"; }
-    warn "omnishell reported degraded module(s); continuing - see 'omnishell doctor'"
-  }
+  # a crash; keep going and list them again at the end (a long run buries them
+  # mid-log). exit >=2 = config/other error - abort.
+  local log_file rc=0
+  log_file="$(mktemp)"
+  omnishell apply -y 2>&1 | tee "$log_file" || rc="${PIPESTATUS[0]}"
+  APPLY_REPORT="$(cat "$log_file")"
+  rm -f "$log_file"
+  if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
+    warn "omnishell apply failed (exit $rc)"
+    exit "$rc"
+  fi
+  [ "$rc" -eq 0 ] || warn "omnishell reported degraded module(s); continuing"
+}
+
+# the `degraded <module> <reason>` lines of an `omnishell apply` report
+_degraded_lines() {
+  printf '%s\n' "$1" | grep -E '^[[:space:]]+degraded[[:space:]]' || true
+}
+
+_degraded_count() {
+  _degraded_lines "$1" | grep -c . || true
+}
+
+# module + reason of every degraded module; prints nothing when there are none
+_degraded_summary() {
+  [ "$(_degraded_count "$1")" -gt 0 ] || return 0
+  warn "degraded omnishell module(s) - not installed or not active:"
+  _degraded_lines "$1" | awk '{ name = $2; $1 = ""; $2 = ""; sub(/^ +/, ""); printf "         %-14s %s\n", name, $0 }' >&2
+  warn "see 'omnishell doctor' for details; fix the cause and re-run ./bootstrap.sh"
+}
+
+finish() {
+  local degraded
+  degraded="$(_degraded_count "$APPLY_REPORT")"
+  _degraded_summary "$APPLY_REPORT"
+  if [ "$degraded" -gt 0 ]; then
+    log "done with $degraded degraded module(s). Open a new shell (exec \$SHELL) to pick up the rest."
+  else
+    log "done. Open a new shell (exec \$SHELL) to pick everything up."
+  fi
 }
 
 # --------------------------------------------------------------------------
@@ -557,7 +659,7 @@ main() {
   log "rendering Root Loops colors"
   bash "$DOTFILES/rootloops/apply.sh"
   setup_terminal_app
-  log "done. Open a new shell (exec \$SHELL) to pick everything up."
+  finish
 }
 
 # BOOTSTRAP_SOURCE_ONLY=1 lets tests source the helpers without running anything.
