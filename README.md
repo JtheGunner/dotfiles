@@ -29,7 +29,10 @@ nothing is configured twice:
 | **`~/.zshrc.local` / `~/.bashrc.local`**                 | machine-specific and secret: per-host `PATH`, tool completions, tokens. **Not version-controlled.**                                                                                                                                              | sourced last by the same marker block                                                                     |
 
 omnishell is consumed as a released binary (Homebrew tap / curl installer); this
-repo never modifies it.
+repo never modifies it. **omnishell 0.3.0 or newer is required**: older releases
+don't know the `starship`, `root-loops`, `tmux`, `broot`, `direnv`, `mise` and
+`colorized-man` modules and silently ignore them. `bootstrap.sh` upgrades an older
+install, or stops with a message if it can't.
 
 ```text
  ~/.zshrc  (generated, real file)
@@ -67,7 +70,7 @@ exec $SHELL
 `bootstrap.sh`:
 
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
-2. installs dependencies, omnishell and Ghostty
+2. installs dependencies, omnishell (upgrading it below 0.3.0) and Ghostty; on apt systems also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
 4. stows the packages
 5. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
@@ -232,7 +235,12 @@ omnishell doctor     # check for drift / degraded modules
 
 `starship`, `mise`, `tmux`, `direnv` and `broot` are **installed** by
 `omnishell apply`, not by `bootstrap.sh`. Where a distro doesn't package one (e.g. `broot` / `starship` on Ubuntu 24.04), omnishell falls back to building it
-and otherwise reports the module as *degraded*; the rest keeps working.
+from source with `cargo`. Those projects need Rust 1.85 or newer, which is newer than
+the distro `cargo`, so on apt systems `bootstrap.sh` installs a Rust toolchain via
+[rustup](https://rustup.rs) (minimal profile, skipped when `cargo` is already recent
+enough). A module that still can't be installed is reported as *degraded*; the rest
+keeps working, and `bootstrap.sh` lists every degraded module and its reason again
+at the end of the run.
 
 Prompt styling is `~/.config/omnishell/starship.toml` (seeded once, then yours,
 not tracked here); the `~/.tmux.conf` *file* is the `tmux/` stow package below.
