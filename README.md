@@ -29,9 +29,10 @@ nothing is configured twice:
 | **`~/.zshrc.local` / `~/.bashrc.local`**                 | machine-specific and secret: per-host `PATH`, tool completions, tokens. **Not version-controlled.**                                                                                                                                              | sourced last by the same marker block                                                                     |
 
 omnishell is consumed as a released binary (Homebrew tap / curl installer); this
-repo never modifies it. **omnishell 0.3.0 or newer is required**: older releases
-don't know the `starship`, `root-loops`, `tmux`, `broot`, `direnv`, `mise` and
-`colorized-man` modules and silently ignore them. `bootstrap.sh` upgrades an older
+repo never modifies it. **omnishell 0.5.0 or newer is required**: older releases
+don't know all of the `starship`, `root-loops`, `tmux`, `broot`, `direnv`, `mise` and
+`colorized-man` modules, and install `mise`, `starship` and `broot` with a long
+source build where no distro package exists. `bootstrap.sh` upgrades an older
 install, or stops with a message if it can't.
 
 ```text
@@ -70,7 +71,7 @@ exec $SHELL
 `bootstrap.sh`:
 
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
-2. installs dependencies, omnishell (upgrading it below 0.3.0) and Ghostty; on apt systems also a Rust toolchain
+2. installs dependencies, omnishell (upgrading it below 0.5.0) and Ghostty; on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
 4. stows the packages
 5. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
@@ -250,22 +251,16 @@ omnishell doctor     # check for drift / degraded modules
 | `tmux`                                                            | installs tmux; optional auto-attach to a session on shell start             | `session = "default"`, `auto_attach = false` |
 
 `starship`, `mise`, `tmux`, `direnv` and `broot` are **installed** by
-`omnishell apply`, not by `bootstrap.sh`. `mise` has no apt package, so omnishell
-builds it from source with `cargo`. That needs Rust 1.85 or newer, which is newer
-than the distro `cargo`, plus `cmake`, `pkg-config` and the OpenSSL headers. On apt
-systems `bootstrap.sh` installs those and a Rust toolchain via
+`omnishell apply`, not by `bootstrap.sh`. On Linux x86_64 and arm64, `mise`,
+`starship` and `broot` come from a checksum-verified upstream release binary where
+the distro has no package. On any other CPU (32-bit ARM, riscv64, ...) omnishell
+builds them from source with `cargo`. That needs Rust 1.85 or newer, which is newer
+than the distro `cargo`, plus `cmake`, `pkg-config` and the OpenSSL headers. There,
+on apt systems, `bootstrap.sh` installs those and a Rust toolchain via
 [rustup](https://rustup.rs) (minimal profile, skipped when `cargo` is already recent
 enough). A module that still can't be installed is reported as *degraded*; the rest
 keeps working, and `bootstrap.sh` lists every degraded module and its reason again
 at the end of the run.
-
-> [!WARNING]
-> `starship` and `broot` are not in Ubuntu 24.04's apt repositories. omnishell
-> 0.3.x does not fall back to a source build when a package is listed for apt but
-> missing from the repos, so both modules stay *degraded* there: no starship
-> prompt, no `br`. Install them yourself (for example `starship` via its
-> [installer](https://starship.rs/guide/#%F0%9F%9A%80-installation)) until omnishell
-> handles this.
 
 Prompt styling is `~/.config/omnishell/starship.toml` (seeded once, then yours,
 not tracked here); the `~/.tmux.conf` *file* is the `tmux/` stow package below.

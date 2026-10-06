@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # bootstrap.sh omnishell + toolchain handling: the minimum omnishell version,
-# the Rust toolchain omnishell's git + cargo fallbacks need, and the summary of
+# the Rust toolchain omnishell's git + cargo fallbacks need (on CPUs without
+# release binaries only), and the summary of
 # degraded modules at the end of a run. Everything runs against stub binaries in
 # a throwaway PATH - nothing is installed.
 # SC2034: OUT / RC are read inside the eval'd check expressions.
@@ -17,8 +18,8 @@ fail() { printf '   FAIL %s\n' "$1"; failures=$((failures + 1)); }
 check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
 
 # the omnishell an upgrade would install
-NEW_OMNISHELL="$WORK/omnishell-0.3.2"
-printf '#!/bin/sh\n[ "$1" = version ] && echo "0.3.2 (commit abc, built now)"\n' > "$NEW_OMNISHELL"
+NEW_OMNISHELL="$WORK/omnishell-0.5.0"
+printf '#!/bin/sh\n[ "$1" = version ] && echo "0.5.0 (commit abc, built now)"\n' > "$NEW_OMNISHELL"
 chmod +x "$NEW_OMNISHELL"
 
 # a fresh stub dir (BIN) and HOME for each case
@@ -50,8 +51,8 @@ run_fn() {   # <fn> [args...]
 
 echo ">> _version_ge"
 new_case vge
-run_fn '_version_ge 0.3.2 0.3.0 && echo yes'
-check "0.3.2 >= 0.3.0"          '[ "$OUT" = yes ]'
+run_fn '_version_ge 0.5.0 0.3.0 && echo yes'
+check "0.5.0 >= 0.3.0"          '[ "$OUT" = yes ]'
 run_fn '_version_ge 0.3.0 0.3.0 && echo yes'
 check "0.3.0 >= 0.3.0"          '[ "$OUT" = yes ]'
 run_fn '_version_ge 0.2.1 0.3.0 || echo no'
@@ -63,33 +64,33 @@ check "1.75.0 < 1.85 (different field counts)" '[ "$OUT" = no ]'
 
 echo ">> install_omnishell: current version"
 new_case current
-omnishell_stub "$BIN" 0.3.2
+omnishell_stub "$BIN" 0.5.0
 stub curl 'exit 1'
 run_fn install_omnishell
-check "0.3.2 is kept"                  '[ "$RC" = 0 ] && grep -q "already installed (0.3.2" <<< "$OUT"'
+check "0.5.0 is kept"                  '[ "$RC" = 0 ] && grep -q "already installed (0.5.0" <<< "$OUT"'
 check "no installer was fetched"       '! grep -q "^curl" "$CALLS"'
 
 echo ">> install_omnishell: too old, curl installer upgrades it"
 new_case upgrade
-omnishell_stub "$BIN" 0.2.1
+omnishell_stub "$BIN" 0.4.0
 # the stub installer drops a newer omnishell into ~/.local/bin, which comes first on PATH
 stub curl "echo 'mkdir -p \"\$HOME/.local/bin\"; cp \"$NEW_OMNISHELL\" \"\$HOME/.local/bin/omnishell\"'"
 run_fn install_omnishell
 check "old version triggers the upgrade" 'grep -q "^curl .*omnishell/main/install.sh" "$CALLS"'
-check "reports the upgrade"            'grep -q "below the minimum 0.3.0" <<< "$OUT"'
+check "reports the upgrade"            'grep -q "below the minimum 0.5.0" <<< "$OUT"'
 check "run succeeds"                   '[ "$RC" = 0 ]'
 
 echo ">> install_omnishell: too old and the upgrade does not help"
 new_case stuck
-omnishell_stub "$BIN" 0.2.1
+omnishell_stub "$BIN" 0.4.0
 stub curl 'echo true'
 run_fn install_omnishell
 check "stops instead of carrying on"   '[ "$RC" -ne 0 ]'
-check "names the version and the fix"  'grep -q "0.2.1" <<< "$OUT" && grep -q "0.3.0" <<< "$OUT"'
+check "names the version and the fix"  'grep -q "0.4.0" <<< "$OUT" && grep -q "0.5.0" <<< "$OUT"'
 
 echo ">> install_omnishell: Homebrew upgrades it"
 new_case brew
-omnishell_stub "$BIN" 0.2.1
+omnishell_stub "$BIN" 0.4.0
 stub brew "[ \"\$1\" = upgrade ] && cp \"$NEW_OMNISHELL\" \"\$(dirname \"\$0\")/omnishell\"; exit 0"
 run_fn install_omnishell
 check "brew upgrade is used"           'grep -q "^brew upgrade .*omnishell" "$CALLS"'
@@ -166,16 +167,43 @@ omnishell_apply_stub 2 "error: bad config"
 run_fn 'apply_omnishell; echo not-reached'
 check "config error (exit 2) aborts with its exit code" '[ "$RC" = 2 ] && ! grep -q not-reached <<< "$OUT"'
 
-echo ">> install_deps (apt): build dependencies for the cargo fallbacks"
-new_case apt-deps
-stub apt-get 'exit 0'
-stub apt-cache 'exit 0'
-stub stow 'exit 0'
-stub cargo 'echo "cargo 1.99.0 (abc 2026-09-28)"'
-# SUDO is cleared so the stub apt-get is the only thing that runs
-run_fn 'SUDO=""; install_deps'
+echo ">> needs_source_builds"
+for arch in x86_64 aarch64 arm64; do
+  new_case "arch-$arch"
+  stub uname "echo $arch"
+  run_fn needs_source_builds
+  check "$arch has release binaries -> no source build" '[ "$RC" != 0 ]'
+done
+for arch in armv6l armv7l riscv64; do
+  new_case "arch-$arch"
+  stub uname "echo $arch"
+  run_fn needs_source_builds
+  check "$arch has no release binaries -> source build" '[ "$RC" = 0 ]'
+done
+
+echo ">> install_deps (apt): build dependencies only where omnishell builds from source"
+apt_case() {   # <case> <arch>
+  new_case "$1"
+  stub uname "echo $2"
+  stub apt-get 'exit 0'
+  stub apt-cache 'exit 0'
+  stub stow 'exit 0'
+  stub cargo 'echo "cargo 1.75.0 (abc 2024-01-01)"'
+  stub curl 'exit 1'
+  # SUDO is cleared so the stub apt-get is the only thing that runs
+  run_fn 'SUDO=""; install_deps'
+}
+apt_case apt-armv7 armv7l
 for dep in build-essential cmake pkg-config libssl-dev; do
-  check "apt installs $dep" "grep -q '^apt-get install .* $dep\$' '$CALLS'"
+  check "armv7l: apt installs $dep" "grep -q '^apt-get install .* $dep\$' '$CALLS'"
+done
+check "armv7l: the Rust toolchain is ensured" 'grep -q "^curl .*sh.rustup.rs" "$CALLS"'
+
+for arch in x86_64 aarch64; do
+  apt_case "apt-$arch" "$arch"
+  check "$arch: base packages are still installed" "grep -q '^apt-get install .* stow\$' '$CALLS'"
+  check "$arch: no build dependencies" '! grep -q -E "^apt-get install .* (build-essential|cmake|pkg-config|libssl-dev)$" "$CALLS"'
+  check "$arch: no Rust toolchain" '! grep -q "^curl" "$CALLS"'
 done
 
 [ "$failures" -eq 0 ] || { echo "$failures failure(s)"; exit 1; }
