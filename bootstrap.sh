@@ -12,7 +12,7 @@
 #
 # What it does (idempotent - safe to re-run):
 #   0. check that rc files + stow links all point at this checkout
-#   1. install dependencies + omnishell (>= 0.5.0, upgraded if older) + ghostty;
+#   1. install dependencies + omnishell (>= 0.6.0, upgraded if older) + ghostty;
 #      on apt systems with a CPU omnishell has no release binaries for (not
 #      x86_64 / arm64) also a Rust toolchain for its git + cargo fallbacks
 #   2. write real ~/.zshrc + ~/.bashrc that source this repo's rc libraries
@@ -68,10 +68,13 @@ done
 # omnishell 0.3.0 introduced the modules omnishell/config.toml enables (starship,
 # root-loops, tmux, broot, direnv, mise, colorized-man); 0.5.0 installs mise,
 # starship and broot from an upstream release binary on Linux x86_64 / arm64
-# instead of a cargo build. Every other CPU still builds them from source, which
-# needs Rust 1.85 - newer than what Debian / Ubuntu LTS ship as `cargo`.
-OMNISHELL_MIN_VERSION="0.5.0"
-RUST_MIN_VERSION="1.85"
+# instead of a cargo build; 0.6.0 is the first release that installs on 32-bit
+# ARM, with release binaries for starship and mise (armv7) there. What has no
+# binary (broot on 32-bit ARM, mise on armv6, everything on other CPUs) still
+# builds from source, which needs Rust 1.95 for mise / starship (broot: 1.85) -
+# newer than what Debian / Ubuntu LTS ship as `cargo`.
+OMNISHELL_MIN_VERSION="0.6.0"
+RUST_MIN_VERSION="1.95"
 
 # What a cargo build of mise needs besides Rust: a C toolchain, cmake (libz-ng-sys),
 # pkg-config + OpenSSL headers (openssl-sys). Only installed where omnishell has
