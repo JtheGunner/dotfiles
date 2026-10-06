@@ -18,8 +18,8 @@ fail() { printf '   FAIL %s\n' "$1"; failures=$((failures + 1)); }
 check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
 
 # the omnishell an upgrade would install
-NEW_OMNISHELL="$WORK/omnishell-0.5.0"
-printf '#!/bin/sh\n[ "$1" = version ] && echo "0.5.0 (commit abc, built now)"\n' > "$NEW_OMNISHELL"
+NEW_OMNISHELL="$WORK/omnishell-0.6.0"
+printf '#!/bin/sh\n[ "$1" = version ] && echo "0.6.0 (commit abc, built now)"\n' > "$NEW_OMNISHELL"
 chmod +x "$NEW_OMNISHELL"
 
 # a fresh stub dir (BIN) and HOME for each case
@@ -59,38 +59,38 @@ run_fn '_version_ge 0.2.1 0.3.0 || echo no'
 check "0.2.1 < 0.3.0"           '[ "$OUT" = no ]'
 run_fn '_version_ge 0.10.0 0.9.5 && echo yes'
 check "0.10.0 >= 0.9.5 (numeric, not lexical)" '[ "$OUT" = yes ]'
-run_fn '_version_ge 1.75.0 1.85 || echo no'
-check "1.75.0 < 1.85 (different field counts)" '[ "$OUT" = no ]'
+run_fn '_version_ge 1.75.0 1.95 || echo no'
+check "1.75.0 < 1.95 (different field counts)" '[ "$OUT" = no ]'
 
 echo ">> install_omnishell: current version"
 new_case current
-omnishell_stub "$BIN" 0.5.0
+omnishell_stub "$BIN" 0.6.0
 stub curl 'exit 1'
 run_fn install_omnishell
-check "0.5.0 is kept"                  '[ "$RC" = 0 ] && grep -q "already installed (0.5.0" <<< "$OUT"'
+check "0.6.0 is kept"                  '[ "$RC" = 0 ] && grep -q "already installed (0.6.0" <<< "$OUT"'
 check "no installer was fetched"       '! grep -q "^curl" "$CALLS"'
 
 echo ">> install_omnishell: too old, curl installer upgrades it"
 new_case upgrade
-omnishell_stub "$BIN" 0.4.0
+omnishell_stub "$BIN" 0.5.0
 # the stub installer drops a newer omnishell into ~/.local/bin, which comes first on PATH
 stub curl "echo 'mkdir -p \"\$HOME/.local/bin\"; cp \"$NEW_OMNISHELL\" \"\$HOME/.local/bin/omnishell\"'"
 run_fn install_omnishell
 check "old version triggers the upgrade" 'grep -q "^curl .*omnishell/main/install.sh" "$CALLS"'
-check "reports the upgrade"            'grep -q "below the minimum 0.5.0" <<< "$OUT"'
+check "reports the upgrade"            'grep -q "below the minimum 0.6.0" <<< "$OUT"'
 check "run succeeds"                   '[ "$RC" = 0 ]'
 
 echo ">> install_omnishell: too old and the upgrade does not help"
 new_case stuck
-omnishell_stub "$BIN" 0.4.0
+omnishell_stub "$BIN" 0.5.0
 stub curl 'echo true'
 run_fn install_omnishell
 check "stops instead of carrying on"   '[ "$RC" -ne 0 ]'
-check "names the version and the fix"  'grep -q "0.4.0" <<< "$OUT" && grep -q "0.5.0" <<< "$OUT"'
+check "names the version and the fix"  'grep -q "0.5.0" <<< "$OUT" && grep -q "0.6.0" <<< "$OUT"'
 
 echo ">> install_omnishell: Homebrew upgrades it"
 new_case brew
-omnishell_stub "$BIN" 0.4.0
+omnishell_stub "$BIN" 0.5.0
 stub brew "[ \"\$1\" = upgrade ] && cp \"$NEW_OMNISHELL\" \"\$(dirname \"\$0\")/omnishell\"; exit 0"
 run_fn install_omnishell
 check "brew upgrade is used"           'grep -q "^brew upgrade .*omnishell" "$CALLS"'
@@ -109,11 +109,17 @@ stub curl "echo 'echo rustup-init >> \"$CALLS\"'"
 run_fn ensure_rust_toolchain
 check "cargo 1.75 is too old -> rustup is installed" 'grep -q "^rustup-init" "$CALLS"'
 
+new_case rust-below-mise
+stub cargo 'echo "cargo 1.90.0 (abc 2025-09-01)"'
+stub curl "echo 'echo rustup-init >> \"$CALLS\"'"
+run_fn ensure_rust_toolchain
+check "cargo 1.90 is too old for mise -> rustup is installed" 'grep -q "^rustup-init" "$CALLS"'
+
 new_case rust-ok
-stub cargo 'echo "cargo 1.86.0 (abc 2025-01-01)"'
+stub cargo 'echo "cargo 1.95.0 (abc 2026-01-01)"'
 stub curl 'exit 1'
 run_fn ensure_rust_toolchain
-check "cargo 1.86 is left alone"       '[ "$RC" = 0 ] && ! grep -q "^curl" "$CALLS"'
+check "cargo 1.95 is left alone"       '[ "$RC" = 0 ] && ! grep -q "^curl" "$CALLS"'
 
 new_case rust-existing-rustup
 stub cargo 'echo "cargo 1.75.0 (abc 2024-01-01)"'
