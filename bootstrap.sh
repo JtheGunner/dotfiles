@@ -12,8 +12,9 @@
 #
 # What it does (idempotent - safe to re-run):
 #   0. check that rc files + stow links all point at this checkout
-#   1. install dependencies + omnishell (>= 0.3.0, upgraded if older) + ghostty;
-#      on apt systems also a Rust toolchain for omnishell's git + cargo fallbacks
+#   1. install dependencies + omnishell (>= 0.5.0, upgraded if older) + ghostty;
+#      on apt systems with a CPU omnishell has no release binaries for (not
+#      x86_64 / arm64) also a Rust toolchain for its git + cargo fallbacks
 #   2. write real ~/.zshrc + ~/.bashrc that source this repo's rc libraries
 #   3. stow the config-file packages into $HOME
 #   4. apply the version-controlled omnishell config (appends its marker block)
@@ -65,14 +66,16 @@ done
 [ -d "$DOTFILES/nvim" ] && PACKAGES+=(nvim)
 
 # omnishell 0.3.0 introduced the modules omnishell/config.toml enables (starship,
-# root-loops, tmux, broot, direnv, mise, colorized-man); older releases ignore
-# them with a warning. starship, broot and mise build with edition 2024, which
+# root-loops, tmux, broot, direnv, mise, colorized-man); 0.5.0 installs mise,
+# starship and broot from an upstream release binary on Linux x86_64 / arm64
+# instead of a cargo build. Every other CPU still builds them from source, which
 # needs Rust 1.85 - newer than what Debian / Ubuntu LTS ship as `cargo`.
-OMNISHELL_MIN_VERSION="0.3.0"
+OMNISHELL_MIN_VERSION="0.5.0"
 RUST_MIN_VERSION="1.85"
 
 # What a cargo build of mise needs besides Rust: a C toolchain, cmake (libz-ng-sys),
-# pkg-config + OpenSSL headers (openssl-sys).
+# pkg-config + OpenSSL headers (openssl-sys). Only installed where omnishell has
+# to build from source (see needs_source_builds).
 APT_BUILD_DEPS=(build-essential cmake pkg-config libssl-dev)
 
 # output of the last `omnishell apply`, for the degraded-module summary at the end
@@ -122,14 +125,21 @@ install_deps() {
     # install one at a time so a single unavailable package doesn't sink the rest
     # (Debian names: fd -> fd-find, delta -> git-delta; bat/fd binaries are
     #  batcat/fdfind, which omnishell's modern-aliases module handles)
-    for pkg in stow git-delta fzf zoxide ripgrep fd-find bat curl ca-certificates "${APT_BUILD_DEPS[@]}"; do
+    local pkgs=(stow git-delta fzf zoxide ripgrep fd-find bat curl ca-certificates)
+    # starship, mise, tmux, direnv + broot are handled by their omnishell
+    # modules: 'omnishell apply' installs from apt/brew/pacman where available,
+    # then an upstream release binary (x86_64 / arm64), and only otherwise falls
+    # back to a git + cargo build - which needs a recent Rust toolchain plus the
+    # build dependencies to be there already.
+    if needs_source_builds; then
+      pkgs+=("${APT_BUILD_DEPS[@]}")
+    fi
+    for pkg in "${pkgs[@]}"; do
       $SUDO apt-get install -y -qq "$pkg" >/dev/null 2>&1 || warn "apt: $pkg not installed"
     done
-    # starship, mise, tmux, direnv + broot are handled by their omnishell
-    # modules: 'omnishell apply' installs from apt/brew/pacman where available
-    # and otherwise falls back to a git + cargo build - which needs a recent Rust
-    # toolchain plus the build dependencies above to be there already.
-    ensure_rust_toolchain
+    if needs_source_builds; then
+      ensure_rust_toolchain
+    fi
   else
     warn "no supported package manager found - install deps manually: ${DEPS[*]}"
   fi
@@ -181,6 +191,15 @@ install_ghostty() {
   else
     warn "install ghostty manually: https://ghostty.org/download (config is already stowed)"
   fi
+}
+
+# True on CPUs omnishell ships no release binaries for (32-bit ARM, riscv64, ...):
+# there its modules fall back to a cargo build. x86_64 and arm64 never need one.
+needs_source_builds() {
+  case "$(uname -m)" in
+    x86_64 | amd64 | aarch64 | arm64) return 1 ;;
+    *) return 0 ;;
+  esac
 }
 
 # Rust >= $RUST_MIN_VERSION via rustup, for omnishell's git + cargo fallbacks. The
