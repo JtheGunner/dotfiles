@@ -146,6 +146,22 @@ git config --file ~/.gitconfig.local user.name  "Your Name"
 git config --file ~/.gitconfig.local user.email "12345+you@users.noreply.github.com"
 ```
 
+### ✍️ Signing commits with SSH (optional)
+
+`bootstrap.sh` also asks for the path to your **public** SSH key. Give just the
+path and the rest of the signing setup is derived from it. Leave it empty to
+skip signing. To set it by hand:
+
+```sh
+git config --file ~/.gitconfig.local gpg.format ssh
+git config --file ~/.gitconfig.local user.signingkey ~/.ssh/id_ed25519.pub
+git config --file ~/.gitconfig.local commit.gpgsign true
+git config --file ~/.gitconfig.local tag.gpgsign true
+```
+
+The key itself is never shipped by this repo, and nothing is asked again once
+`user.signingkey` is set.
+
 > [!IMPORTANT]
 > `~/.config/git/config` is a stow symlink into this repo, so anything written
 > there ends up in version control. `bootstrap.sh` creates an empty `~/.gitconfig`

@@ -551,6 +551,41 @@ setup_git_identity() {
 }
 
 # --------------------------------------------------------------------------
+# 3d. optional SSH commit signing - only the public key path is asked for; the
+#     rest of the signing config is derived from it. Written to the untracked
+#     ~/.gitconfig.local, never to the stowed git config.
+# --------------------------------------------------------------------------
+write_git_signing_config() {
+  local local_cfg="$HOME/.gitconfig.local" key_path="${1:-}" key_file
+  [ -n "$key_path" ] || return 0
+  key_file="${key_path/#\~/$HOME}"
+  case "$key_file" in
+    *.pub) ;;
+    *) warn "signing key must be a public key file (*.pub): $key_path - skipped"; return 0 ;;
+  esac
+  [ -f "$key_file" ] || { warn "signing key not found: $key_path - skipped"; return 0; }
+  git config --file "$local_cfg" gpg.format ssh
+  git config --file "$local_cfg" user.signingkey "$key_path"
+  git config --file "$local_cfg" commit.gpgsign true
+  git config --file "$local_cfg" tag.gpgsign true
+  log "wrote ssh signing config to $local_cfg"
+}
+
+setup_git_signing_key() {
+  local key_path
+  if git config --get user.signingkey >/dev/null 2>&1; then
+    log "git signing key already set ($(git config --get user.signingkey))"
+    return 0
+  fi
+  if [ "${ASSUME_YES:-0}" = "1" ] || ! { : > /dev/tty; } 2>/dev/null; then
+    return 0
+  fi
+  printf 'git ssh signing key, public key path (empty = skip signing): ' > /dev/tty
+  read -r key_path < /dev/tty || key_path=""
+  write_git_signing_config "$key_path"
+}
+
+# --------------------------------------------------------------------------
 # 4. omnishell config
 # --------------------------------------------------------------------------
 apply_omnishell() {
@@ -658,6 +693,7 @@ main() {
   stow_packages
   setup_git_delta
   setup_git_identity
+  setup_git_signing_key
   apply_omnishell
   wire_shell_d
   log "rendering Root Loops colors"

@@ -73,6 +73,39 @@ run 'setup_git_delta; setup_git_identity'
 check "is left untouched" "cmp -s '$HOME_DIR/.gitconfig.local' '$WORK/expected'"
 check "provides the identity" "[ \"\$(git_in_home config user.email)\" = someone@example.com ]"
 
+echo ">> ssh signing key"
+new_home signing; with_delta
+printf '[user]\n\tname = Someone\n\temail = someone@example.com\n' > "$HOME_DIR/.gitconfig.local"
+mkdir -p "$HOME_DIR/.ssh"
+printf 'ssh-ed25519 AAAA test\n' > "$HOME_DIR/.ssh/id_ed25519.pub"
+printf 'private\n' > "$HOME_DIR/.ssh/id_ed25519"
+run 'write_git_signing_config "~/.ssh/id_ed25519.pub"'
+check "writes gpg.format = ssh" "[ \"\$(git_in_home config --file '$HOME_DIR/.gitconfig.local' gpg.format)\" = ssh ]"
+check "writes user.signingkey" \
+  "[ \"\$(git_in_home config --file '$HOME_DIR/.gitconfig.local' user.signingkey)\" = '~/.ssh/id_ed25519.pub' ]"
+check "enables commit.gpgsign" "[ \"\$(git_in_home config --file '$HOME_DIR/.gitconfig.local' commit.gpgsign)\" = true ]"
+check "enables tag.gpgsign" "[ \"\$(git_in_home config --file '$HOME_DIR/.gitconfig.local' tag.gpgsign)\" = true ]"
+check "keeps the existing identity" "[ \"\$(git_in_home config user.email)\" = someone@example.com ]"
+check "leaves the stowed config untouched" \
+  "cmp -s '$DOTFILES/git/.config/git/config' '$HOME_DIR/.config/git/config'"
+
+new_home signing-bad; with_delta
+run 'write_git_signing_config "~/.ssh/missing.pub"'
+check "ignores a missing key file" "[ ! -e '$HOME_DIR/.gitconfig.local' ]"
+mkdir -p "$HOME_DIR/.ssh"; printf 'private\n' > "$HOME_DIR/.ssh/id_ed25519"
+run 'write_git_signing_config "~/.ssh/id_ed25519"'
+check "ignores a path without .pub" "[ ! -e '$HOME_DIR/.gitconfig.local' ]"
+run 'write_git_signing_config ""'
+check "ignores an empty path" "[ ! -e '$HOME_DIR/.gitconfig.local' ]"
+run 'setup_git_signing_key'
+check "writes nothing without a tty" "[ ! -e '$HOME_DIR/.gitconfig.local' ]"
+
+new_home signing-set; with_delta
+printf '[user]\n\tsigningkey = ~/.ssh/other.pub\n' > "$HOME_DIR/.gitconfig.local"
+cp "$HOME_DIR/.gitconfig.local" "$WORK/expected"
+run 'setup_git_signing_key'
+check "keeps an already configured key" "cmp -s '$HOME_DIR/.gitconfig.local' '$WORK/expected'"
+
 echo ">> delta not installed"
 new_home nodelta; with_delta; run setup_git_delta; without_delta; run setup_git_delta
 check "removes a stale ~/.gitconfig.delta" "[ ! -e '$HOME_DIR/.gitconfig.delta' ]"
