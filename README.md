@@ -234,13 +234,22 @@ omnishell doctor     # check for drift / degraded modules
 | `tmux`                                                            | installs tmux; optional auto-attach to a session on shell start             | `session = "default"`, `auto_attach = false` |
 
 `starship`, `mise`, `tmux`, `direnv` and `broot` are **installed** by
-`omnishell apply`, not by `bootstrap.sh`. Where a distro doesn't package one (e.g. `broot` / `starship` on Ubuntu 24.04), omnishell falls back to building it
-from source with `cargo`. Those projects need Rust 1.85 or newer, which is newer than
-the distro `cargo`, so on apt systems `bootstrap.sh` installs a Rust toolchain via
+`omnishell apply`, not by `bootstrap.sh`. `mise` has no apt package, so omnishell
+builds it from source with `cargo`. That needs Rust 1.85 or newer, which is newer
+than the distro `cargo`, plus `cmake`, `pkg-config` and the OpenSSL headers. On apt
+systems `bootstrap.sh` installs those and a Rust toolchain via
 [rustup](https://rustup.rs) (minimal profile, skipped when `cargo` is already recent
 enough). A module that still can't be installed is reported as *degraded*; the rest
 keeps working, and `bootstrap.sh` lists every degraded module and its reason again
 at the end of the run.
+
+> [!WARNING]
+> `starship` and `broot` are not in Ubuntu 24.04's apt repositories. omnishell
+> 0.3.x does not fall back to a source build when a package is listed for apt but
+> missing from the repos, so both modules stay *degraded* there: no starship
+> prompt, no `br`. Install them yourself (for example `starship` via its
+> [installer](https://starship.rs/guide/#%F0%9F%9A%80-installation)) until omnishell
+> handles this.
 
 Prompt styling is `~/.config/omnishell/starship.toml` (seeded once, then yours,
 not tracked here); the `~/.tmux.conf` *file* is the `tmux/` stow package below.

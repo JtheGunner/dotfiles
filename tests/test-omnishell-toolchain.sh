@@ -166,5 +166,17 @@ omnishell_apply_stub 2 "error: bad config"
 run_fn 'apply_omnishell; echo not-reached'
 check "config error (exit 2) aborts with its exit code" '[ "$RC" = 2 ] && ! grep -q not-reached <<< "$OUT"'
 
+echo ">> install_deps (apt): build dependencies for the cargo fallbacks"
+new_case apt-deps
+stub apt-get 'exit 0'
+stub apt-cache 'exit 0'
+stub stow 'exit 0'
+stub cargo 'echo "cargo 1.99.0 (abc 2026-09-28)"'
+# SUDO is cleared so the stub apt-get is the only thing that runs
+run_fn 'SUDO=""; install_deps'
+for dep in build-essential cmake pkg-config libssl-dev; do
+  check "apt installs $dep" "grep -q '^apt-get install .* $dep\$' '$CALLS'"
+done
+
 [ "$failures" -eq 0 ] || { echo "$failures failure(s)"; exit 1; }
 echo "all ok"

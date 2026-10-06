@@ -71,6 +71,10 @@ done
 OMNISHELL_MIN_VERSION="0.3.0"
 RUST_MIN_VERSION="1.85"
 
+# What a cargo build of mise needs besides Rust: a C toolchain, cmake (libz-ng-sys),
+# pkg-config + OpenSSL headers (openssl-sys).
+APT_BUILD_DEPS=(build-essential cmake pkg-config libssl-dev)
+
 # output of the last `omnishell apply`, for the degraded-module summary at the end
 APPLY_REPORT=""
 
@@ -118,13 +122,13 @@ install_deps() {
     # install one at a time so a single unavailable package doesn't sink the rest
     # (Debian names: fd -> fd-find, delta -> git-delta; bat/fd binaries are
     #  batcat/fdfind, which omnishell's modern-aliases module handles)
-    for pkg in stow git-delta fzf zoxide ripgrep fd-find bat curl ca-certificates build-essential; do
+    for pkg in stow git-delta fzf zoxide ripgrep fd-find bat curl ca-certificates "${APT_BUILD_DEPS[@]}"; do
       $SUDO apt-get install -y -qq "$pkg" >/dev/null 2>&1 || warn "apt: $pkg not installed"
     done
     # starship, mise, tmux, direnv + broot are handled by their omnishell
     # modules: 'omnishell apply' installs from apt/brew/pacman where available
     # and otherwise falls back to a git + cargo build - which needs a recent Rust
-    # toolchain (and the C toolchain from build-essential) to be there already.
+    # toolchain plus the build dependencies above to be there already.
     ensure_rust_toolchain
   else
     warn "no supported package manager found - install deps manually: ${DEPS[*]}"
