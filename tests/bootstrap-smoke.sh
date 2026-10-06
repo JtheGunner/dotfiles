@@ -41,6 +41,7 @@ check "config.toml is the repo's" \
 
 echo ">> git"
 check "no identity is shipped" "! git config --global user.email >/dev/null"
+check "no signing key is shipped" "! git config --global user.signingkey >/dev/null"
 check "git config --global targets ~/.gitconfig" "[ -f '$HOME/.gitconfig' ]"
 
 echo ">> interactive bash"
