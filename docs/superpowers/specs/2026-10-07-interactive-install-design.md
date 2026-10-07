@@ -78,7 +78,9 @@ gives the same result as a run without `--interactive`.
      `settings_merge_omnishell`);
    - a table the TUI removed from the live config: the override stays as it is.
    The same diff and `[y/N]` question as in step 3 applies. Answering `n` leaves the
-   file as it was and the run stops (exit 0).
+   file as it was, the live omnishell config is regenerated from it (so the declined
+   selection does not linger), and the run stops (exit 0). End of input at that
+   question does the same with exit 1. Tools installed before this step stay installed.
 7. **The rest of the install** runs as today. `apply_omnishell` writes the merged
    config again (now from the updated file) and applies once. If the user already
    pressed `a` in the TUI, that apply made the shells current and the second one finds

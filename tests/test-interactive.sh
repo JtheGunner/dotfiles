@@ -130,6 +130,19 @@ check "the README names --interactive"                      'grep -q -- "--inter
 check "the README names the 0.7.0 floor"                    'grep -q "omnishell 0.7.0 or newer" "$DOTFILES/README.md" && ! grep -q "0\.6\.0" "$DOTFILES/README.md"'
 check "the template mentions --interactive"                 'grep -q -- "--interactive" "$DOTFILES/config.toml.example"'
 
+echo ">> modules: a declined selection does not linger"
+fresh
+printf 'printf "\\n[modules.testmod]\\nenabled = true\\n" >> "%s"\n' "$LIVE" > "$WORK/tui.sh"
+ix_run "n\n" 'interactive_modules'
+check "n resets the live omnishell config to the settings file" '! grep -q testmod "$LIVE"'
+check "and says what happened"                                 'grep -q "left as it was" <<< "$OUT"'
+fresh
+ix_run "" 'interactive_modules'
+check "end of input aborts with exit 1"                        '[ "$RC" = 1 ]'
+check "end of input resets the live omnishell config too"     '! grep -q testmod "$LIVE"'
+check "the message does not claim nothing was installed"       'grep -q "was not changed" "$WORK/err" && ! grep -q "nothing was written or installed" "$WORK/err"'
+check "the README tells both n cases apart"                    'grep -q "settings diff" "$DOTFILES/README.md" && grep -q "module diff" "$DOTFILES/README.md"' 
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

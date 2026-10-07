@@ -90,8 +90,10 @@ shown value, `-` unsets it, invalid answers are asked again), then opens
 `omnishell tui` for the module selection. Both are written to
 `~/.config/dotfiles/config.toml` as a diff you confirm; comments and unknown
 content stay, and the previous file is kept as `config.toml.bak`. It needs a
-terminal and cannot be combined with `--yes`. Answering `n` ends the run before
-anything is installed.
+terminal and cannot be combined with `--yes`. Answering `n` at the settings diff
+ends the run before anything is installed. Answering `n` at the module diff ends
+the run there: the file stays as it was and the omnishell config is reset to it,
+but the tools installed so far remain.
 
 > [!TIP]
 > Run it from whichever checkout you want to be live: it installs from there. If

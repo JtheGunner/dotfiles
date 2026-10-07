@@ -417,6 +417,25 @@ check "a replaced table keeps its place"           '[ "$(grep -n "^\[" <<< "$OUT
 write '[git]' 'editor = "vi"'
 check "no changes print the file as it is"         '[ "$(settings_update_omnishell "$F" "$DEF" "$DEF")" = "$(cat "$F")" ]'
 
+echo ">> review fixes: enum commas, tables outside the subset, modules the default lacks"
+check "an enum value with a comma is rejected"        '! _settings_value_ok enum:yes,no,ask str "no,ask"'
+check "an empty enum value is rejected"               '! _settings_value_ok enum:yes,no,ask str ""'
+check "_settings_literal rejects a comma-joined enum" '! lit enum:vi,emacs "vi,emacs" >/dev/null'
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.fzf.options]' 'ctrl_r = true' 'default_opts = "a\tb"' > "$LIVE"
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.fzf.options]' 'ctrl_r = false' 'default_opts = "--height 40%"' > "$DEF"
+write '[git]' 'editor = "vi"'
+OUT="$(settings_omnishell_changes "$LIVE" "$DEF" "$F" 2>"$ERR")"
+check "a table with a line outside the subset is left out"  '[ -z "$OUT" ]'
+check "and the user is told which table"                    'grep -q "modules.fzf.options" "$ERR"'
+check "the file is printed as it is, not with a partial table" '[ "$(settings_update_omnishell "$F" "$LIVE" "$DEF" 2>/dev/null)" = "$(cat "$F")" ]'
+printf '%s\n' '[modules.eza]' 'enabled = false' > "$LIVE"
+printf '%s\n' '[omnishell]' 'x = 1' > "$DEF"
+write '[modules.eza]' 'enabled = true'
+check "turning off a module the default lacks drops its override" '[ "$(settings_omnishell_changes "$LIVE" "$DEF" "$F")" = "drop modules.eza" ]'
+printf '%s\n' '[modules.eza]' 'enabled = true' > "$LIVE"
+write '[git]' 'editor = "vi"'
+check "turning one on still sets it"                          '[ "$(settings_omnishell_changes "$LIVE" "$DEF" "$F")" = "set modules.eza" ]' 
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

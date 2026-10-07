@@ -140,6 +140,7 @@ _settings_type() { printf '%s\n' "$SETTINGS_SCHEMA" | awk -v k="$1" '$1 == k { p
 _settings_value_ok() {
   case "$1" in
     enum:*) [ "$2" = str ] || return 1
+            case "$3" in "" | *,*) return 1 ;; esac
             case ",${1#enum:}," in *",$3,"*) return 0 ;; esac
             return 1 ;;
     bool) [ "$2" = bool ] ;;
@@ -386,18 +387,38 @@ _settings_table_records() {
   settings_parse "$1" 2>/dev/null | awk -F"$SETTINGS_US" -v t="$2" '$1 == t' | sort
 }
 
+# tables of FILE that have a line settings_parse rejects (one name per line)
+_settings_tables_with_rejects() {
+  local lines
+  lines="$(settings_parse "$1" 2>&1 >/dev/null | sed -n 's/^[^:]*:\([0-9][0-9]*\):.*/\1/p')"
+  [ -n "$lines" ] || return 0
+  awk -v lines="$lines" '
+    BEGIN { n = split(lines, a, "\n"); for (i = 1; i <= n; i++) bad[a[i]] = 1 }
+    /^[ \t]*\[[^\[].*\]/ { t = $0; sub(/^[ \t]*\[/, "", t); sub(/\].*$/, "", t); gsub(/^[ \t]+|[ \t]+$/, "", t) }
+    (FNR in bad) && t != "" && !(t in out) { out[t] = 1; print t }
+  ' "$1"
+}
+
 # settings_omnishell_changes LIVE DEFAULT FILE: "set NAME" or "drop NAME" for every
 # omnishell / modules.* table of LIVE that differs from what FILE says today (its
 # own table of that name, else the one in DEFAULT). A table equal to DEFAULT's is
 # dropped from FILE, any other one is set whole.
 settings_omnishell_changes() {
-  local live="$1" default="$2" file="$3" t now cur
+  local live="$1" default="$2" file="$3" t now cur def skipped off
+  skipped="$(_settings_tables_with_rejects "$live")"
+  for t in $skipped; do
+    warn "$live: [$t] holds a value this settings format cannot hold - the table is left out of $file"
+  done
   while IFS= read -r t; do
+    if [ -n "$skipped" ] && grep -qxF "$t" <<< "$skipped"; then continue; fi
     now="$(_settings_table_records "$live" "$t")"
     cur="$(_settings_table_records "$file" "$t")"
-    [ -n "$cur" ] || cur="$(_settings_table_records "$default" "$t")"
+    def="$(_settings_table_records "$default" "$t")"
+    [ -n "$cur" ] || cur="$def"
     [ "$now" = "$cur" ] && continue
-    if [ "$now" = "$(_settings_table_records "$default" "$t")" ]; then echo "drop $t"; else echo "set $t"; fi
+    # a module the default does not list, switched off again, is "the default"
+    off="${t}${SETTINGS_US}enabled${SETTINGS_US}bool${SETTINGS_US}false"
+    if [ "$now" = "$def" ] || { [ -z "$def" ] && [ "$now" = "$off" ]; }; then echo "drop $t"; else echo "set $t"; fi
   done < <(settings_parse "$live" 2>/dev/null |
     awk -F"$SETTINGS_US" '($1 == "omnishell" || $1 ~ /^modules\./) && !($1 in seen) { seen[$1] = 1; print $1 }')
 }

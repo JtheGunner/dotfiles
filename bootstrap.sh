@@ -1000,13 +1000,15 @@ setup_terminal_app() {
 # write both into the settings file (after a diff and a confirmation)
 # --------------------------------------------------------------------------
 INTERACTIVE_CHANGES=""
+PROMPT_ABORT_HOOK=""   # a function to run when the input ends at a prompt
 
 # PROMPT: reads one line into REPLY; end of input aborts before anything changes
 _prompt_line() {
   printf '%s' "$1"
   IFS= read -r REPLY || {
     printf '\n' >&2
-    warn "input closed - nothing was written or installed"
+    [ -z "$PROMPT_ABORT_HOOK" ] || "$PROMPT_ABORT_HOOK"
+    warn "input closed - $BOOTSTRAP_CONFIG was not changed"
     exit 1
   }
 }
@@ -1094,11 +1096,16 @@ interactive_modules() {
   fi
   tmp="$(mktemp)"
   settings_update_omnishell "$BOOTSTRAP_CONFIG" "$live" "$DOTFILES/omnishell/config.toml" > "$tmp"
-  if ! _review_and_install "$tmp" "this machine already follows what you chose in the TUI (a applies it); y keeps it in $BOOTSTRAP_CONFIG too, n leaves the file as it was"; then
+  # a declined or aborted review must not leave the TUI's selection in the live config
+  PROMPT_ABORT_HOOK=_write_omnishell_config
+  if ! _review_and_install "$tmp" "if you pressed a in the TUI this machine already follows your choice; y keeps it in $BOOTSTRAP_CONFIG too, n leaves the file as it was and resets the omnishell config to it"; then
     rm -f "$tmp"
-    log "nothing written, nothing installed"
+    PROMPT_ABORT_HOOK=""
+    _write_omnishell_config
+    log "$BOOTSTRAP_CONFIG left as it was, the omnishell config reset to it; the rest of the install was skipped"
     exit 0
   fi
+  PROMPT_ABORT_HOOK=""
   rm -f "$tmp"
   reload_settings
 }
