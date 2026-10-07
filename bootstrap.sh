@@ -43,25 +43,33 @@ warn() { printf '\033[1;33m warn:\033[0m %s\n' "$*" >&2; }
 # and a mistyped flag change nothing.
 INSTALL_ZSH_FLAG=""
 ASSUME_YES_FLAG=""
+INTERACTIVE_FLAG=""
 parse_args() {
   local arg
   for arg in "$@"; do
     case "$arg" in
       -y | --yes) ASSUME_YES_FLAG=1 ;;
+      --interactive) INTERACTIVE_FLAG=1 ;;
       --install-zsh) INSTALL_ZSH_FLAG=yes ;;
       --no-install-zsh) INSTALL_ZSH_FLAG=no ;;
       -h | --help)
         cat <<USAGE
-usage: $(basename "$0") [--yes] [--install-zsh | --no-install-zsh]
+usage: $(basename "$0") [--interactive] [--yes] [--install-zsh | --no-install-zsh]
   --yes             assume "yes" for all prompts (switch rc files + stow links from another checkout to this one);
                     does NOT install zsh
   --install-zsh     install zsh if it is missing, without asking
   --no-install-zsh  never install zsh
+  --interactive     ask for the settings and pick the omnishell modules in its TUI; writes them to the
+                    settings file after showing a diff (needs a terminal, cannot be combined with --yes)
 USAGE
         exit 0 ;;
       *) printf 'bootstrap.sh: unknown argument: %s\n' "$arg" >&2; exit 2 ;;
     esac
   done
+  if [ -n "$INTERACTIVE_FLAG" ] && [ -n "$ASSUME_YES_FLAG" ]; then
+    printf 'bootstrap.sh: --interactive and --yes contradict each other\n' >&2
+    exit 2
+  fi
 }
 [ -n "${BOOTSTRAP_SOURCE_ONLY:-}" ] || parse_args "$@"
 
@@ -73,10 +81,13 @@ USAGE
 BOOTSTRAP_CONFIG="${DOTFILES_CONFIG:-$HOME/.config/dotfiles/config.toml}"
 settings_migrate_legacy "$(dirname "$BOOTSTRAP_CONFIG")/bootstrap.conf" "$BOOTSTRAP_CONFIG"
 settings_load "$BOOTSTRAP_CONFIG"
-CONF_INSTALL_ZSH="$(settings_get bootstrap.install_zsh)"
-CONF_ASSUME_YES="$(settings_get bootstrap.assume_yes)"
-CONF_TERMINALS="$(settings_get bootstrap.terminals)"
-CONF_GHOSTTY_KEYBINDS="$(settings_get ghostty.keybinds)"
+read_conf_values() {
+  CONF_INSTALL_ZSH="$(settings_get bootstrap.install_zsh)"
+  CONF_ASSUME_YES="$(settings_get bootstrap.assume_yes)"
+  CONF_TERMINALS="$(settings_get bootstrap.terminals)"
+  CONF_GHOSTTY_KEYBINDS="$(settings_get ghostty.keybinds)"
+}
+read_conf_values
 
 # ASSUME_YES: --yes, then DOTFILES_ASSUME_YES / ASSUME_YES=1, then assume_yes = true
 # in the settings file. Don't prompt - e.g. switch rc files and stow links from
@@ -103,26 +114,40 @@ export PATH="$HOME/.local/bin:$PATH"
 # Ghostty is the terminal of choice; extra terminal packages via DOTFILES_TERMINALS
 # or `terminals` in the [bootstrap] table of the settings file. Names are plain
 # package directory names; globbing is off while the list is split.
-PACKAGES=(zsh git tmux bat ghostty)
-set -f
-for t in ${DOTFILES_TERMINALS:-$CONF_TERMINALS}; do
-  case "$t" in
-    *[!A-Za-z0-9_.-]*) warn "ignoring terminal '$t': not a valid package name"; continue ;;
-  esac
-  case " ${PACKAGES[*]} " in *" $t "*) ;; *) [ -d "$DOTFILES/$t" ] && PACKAGES+=("$t") ;; esac
-done
-set +f
-[ -d "$DOTFILES/nvim" ] && PACKAGES+=(nvim)
+build_packages() {
+  local t
+  PACKAGES=(zsh git tmux bat ghostty)
+  set -f
+  for t in ${DOTFILES_TERMINALS:-$CONF_TERMINALS}; do
+    case "$t" in
+      *[!A-Za-z0-9_.-]*) warn "ignoring terminal '$t': not a valid package name"; continue ;;
+    esac
+    case " ${PACKAGES[*]} " in *" $t "*) ;; *) [ -d "$DOTFILES/$t" ] && PACKAGES+=("$t") ;; esac
+  done
+  set +f
+  [ -d "$DOTFILES/nvim" ] && PACKAGES+=(nvim)
+  return 0
+}
+build_packages
+
+# read the settings file again after --interactive changed it
+reload_settings() {
+  settings_load "$BOOTSTRAP_CONFIG"
+  read_conf_values
+  resolve_assume_yes
+  build_packages
+}
 
 # omnishell 0.3.0 introduced the modules omnishell/config.toml enables (starship,
 # root-loops, tmux, broot, direnv, mise, colorized-man); 0.5.0 installs mise,
 # starship and broot from an upstream release binary on Linux x86_64 / arm64
 # instead of a cargo build; 0.6.0 is the first release that installs on 32-bit
-# ARM, with release binaries for starship and mise (armv7) there. What has no
+# ARM, with release binaries for starship and mise (armv7) there; 0.7.0 adds
+# `omnishell tui`, which --interactive hands the module selection to. What has no
 # binary (broot on 32-bit ARM, mise on armv6, everything on other CPUs) still
 # builds from source, which needs Rust 1.95 for mise / starship (broot: 1.85) -
 # newer than what Debian / Ubuntu LTS ship as `cargo`.
-OMNISHELL_MIN_VERSION="0.6.0"
+OMNISHELL_MIN_VERSION="0.7.0"
 RUST_MIN_VERSION="1.95"
 
 # What a cargo build of mise needs besides Rust: a C toolchain, cmake (libz-ng-sys),
@@ -867,12 +892,17 @@ _validate_omnishell_config() {
   return "$rc"
 }
 
-apply_omnishell() {
+# the merged config, validated first, at the live path
+prepare_omnishell_config() {
   _validate_omnishell_config || {
     warn "the omnishell config is invalid - fix the [omnishell] / [modules.*] tables in $BOOTSTRAP_CONFIG (the current omnishell config was left as it is)"
     exit 2
   }
   _write_omnishell_config
+}
+
+apply_omnishell() {
+  prepare_omnishell_config
   log "omnishell init + apply"
   omnishell init -y 2>/dev/null || omnishell init || true
   _write_omnishell_config   # init may template a fresh one
@@ -965,7 +995,18 @@ setup_terminal_app() {
   warn "restart Terminal.app for the 'Root Loops' profile to take effect"
 }
 
+# both ends must be a terminal for the prompts and the TUI (tests redefine this)
+interactive_tty() { [ -t 0 ] && [ -t 1 ]; }
+
+check_interactive_preconditions() {
+  [ -n "$INTERACTIVE_FLAG" ] || return 0
+  interactive_tty && return 0
+  printf 'bootstrap.sh: --interactive needs a terminal; run without it, or edit %s by hand\n' "$BOOTSTRAP_CONFIG" >&2
+  exit 2
+}
+
 main() {
+  check_interactive_preconditions
   check_checkout_consistency
   seed_bootstrap_config
   install_deps

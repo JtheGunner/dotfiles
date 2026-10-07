@@ -491,7 +491,7 @@ check "omnishell 0.7.0 is the floor"                  '[ "$OUT" = 0.7.0 ]'
 
 echo ">> reloading settings"
 fresh
-ix_run '' 'printf "[bootstrap]\nterminals = [\"bash\"]\ninstall_zsh = \"yes\"\n" > "$CONF"; reload_settings; printf "%s|%s" "$CONF_INSTALL_ZSH" "${PACKAGES[*]}"'
+ix_run '' 'printf "[bootstrap]\nterminals = [\"bash\"]\ninstall_zsh = \"yes\"\n" > "$BOOTSTRAP_CONFIG"; reload_settings; printf "%s|%s" "$CONF_INSTALL_ZSH" "${PACKAGES[*]}"'
 check "reload_settings picks up values and packages"  '[ "$OUT" = "yes|zsh git tmux bat ghostty bash" ]'
 
 echo
