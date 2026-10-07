@@ -67,8 +67,8 @@
 #
 # Written to ~/.gitconfig.settings, which the tracked git config includes after
 # the delta config and before your own ~/.gitconfig.local (which wins). The
-# bootstrap only asks for the identity parts and the signing key set here is not
-# asked for again.
+# bootstrap only asks for identity parts that are not set here, and not for a
+# signing key that is set here.
 #
 #user_name = "Your Name"
 #user_email = "you@example.com"
