@@ -150,6 +150,36 @@ sh_run "OMNISHELL_LOG=$LOG OMNISHELL_VALIDATE_RC=2" 'apply_omnishell; echo not-r
 check "the live config is untouched"        '[ "$(cat "$OMNI_CONF")" = OLD ]'
 check "omnishell init is not run either"    '! grep -q "^init" "$LOG"'
 
+echo ">> arguments are parsed before anything is migrated"
+fresh; rm -f "$CONF"; printf 'INSTALL_ZSH=yes\n' > "$WORK/cfg/bootstrap.conf"
+env -i PATH="$WORK/bin" HOME="$WORK/home" DOTFILES_CONFIG="$CONF" "$BASH" "$DOTFILES/bootstrap.sh" --help >/dev/null 2>&1 || true
+check "--help leaves bootstrap.conf alone"          '[ -f "$WORK/cfg/bootstrap.conf" ] && [ ! -e "$CONF" ]'
+env -i PATH="$WORK/bin" HOME="$WORK/home" DOTFILES_CONFIG="$CONF" "$BASH" "$DOTFILES/bootstrap.sh" --bogus >/dev/null 2>&1 || true
+check "an unknown flag leaves bootstrap.conf alone" '[ -f "$WORK/cfg/bootstrap.conf" ] && [ ! -e "$CONF" ]'
+
+echo ">> --yes beats the settings file and the environment"
+fresh; conf '[bootstrap]' 'assume_yes = false'
+sh_run '' 'parse_args --yes; resolve_assume_yes; printf %s "$ASSUME_YES"'
+check "--yes beats assume_yes = false"              '[ "$OUT" = 1 ]'
+sh_run 'DOTFILES_ASSUME_YES=0' 'parse_args --yes; resolve_assume_yes; printf %s "$ASSUME_YES"'
+check "--yes beats DOTFILES_ASSUME_YES=0"           '[ "$OUT" = 1 ]'
+sh_run '' 'resolve_assume_yes; printf %s "$ASSUME_YES"'
+check "without --yes the file's false stays 0"      '[ "$OUT" = 0 ]'
+
+echo ">> terminal names"
+fresh; conf '[bootstrap]' 'terminals = ["*"]'
+cd "$DOTFILES"
+sh_run '' 'printf "%s " "${PACKAGES[@]}"'
+cd "$WORK"
+check "a glob is not expanded"                      '! grep -qw rootloops <<< "$OUT"'
+check "an invalid name is reported"                 'grep -q "ignoring terminal" "$WORK/err"'
+fresh
+sh_run 'DOTFILES_TERMINALS=../x' 'printf "%s " "${PACKAGES[@]}"'
+check "the environment variable is validated too"   'grep -q "ignoring terminal" "$WORK/err"'
+
+echo ">> template"
+check "the template lists the unsupported TOML forms" "grep -q 'Not supported' '$TEMPLATE'"
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

@@ -8,6 +8,9 @@
 # booleans and one-line arrays, and # comments. The file is parsed, never
 # executed; unknown tables, unknown keys and invalid values are reported and
 # ignored.
+# Not supported (reported and ignored): spaces inside [ table ] headers, trailing
+# commas in arrays, multi-line values, inline tables, dotted keys, single-quoted
+# strings and the escapes \n, \t and \u (only \" and \\ work).
 # Precedence: command-line flag > environment variable > this file > default.
 
 # [bootstrap]
@@ -37,8 +40,8 @@
 # the tracked Ghostty config. Hand-written overrides in ~/.config/ghostty.local
 # still win.
 #font_family = "Cascadia Mono NF"
-#font_size = 12
-#background_opacity = 0.98
+#font_size = 12                  # a number above 0
+#background_opacity = 0.98      # 0 (transparent) to 1 (opaque)
 
 # omnishell: a table below replaces the whole table of the same name in the
 # tracked omnishell/config.toml - restate every key you want to keep. Tables the

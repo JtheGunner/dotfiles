@@ -217,6 +217,45 @@ check "a control character in a string rejects the line" '! grep -q "^bootstrap|
 check "and warns about it"                               'grep -q "control character" "$ERR"'
 check "other lines still parse"                          'grep -qxF "bootstrap|z|int|1" <<< "$OUT"'
 
+echo ">> number ranges"
+rng() {   # <key> <value> -> ok | ignored
+  write '[ghostty]' "$1 = $2"
+  settings_load "$F" 2>/dev/null
+  if [ -n "$(settings_get "ghostty.$1")" ]; then echo ok; else echo ignored; fi
+}
+check "font_size 12.5 is accepted"          '[ "$(rng font_size 12.5)" = ok ]'
+check "font_size 0 is ignored"              '[ "$(rng font_size 0)" = ignored ]'
+check "font_size -3 is ignored"             '[ "$(rng font_size -3)" = ignored ]'
+check "background_opacity 0 is accepted"    '[ "$(rng background_opacity 0)" = ok ]'
+check "background_opacity 0.98 is accepted" '[ "$(rng background_opacity 0.98)" = ok ]'
+check "background_opacity 1 is accepted"    '[ "$(rng background_opacity 1)" = ok ]'
+check "background_opacity 7 is ignored"     '[ "$(rng background_opacity 7)" = ignored ]'
+check "background_opacity -0.1 is ignored"  '[ "$(rng background_opacity -0.1)" = ignored ]'
+
+echo ">> old KEY=value format"
+write 'INSTALL_ZSH=yes' 'ASSUME_YES=no'
+settings_load "$F" 2>"$ERR"
+check "an old-format file is called out once" '[ "$(grep -c "old bootstrap.conf format" "$ERR")" = 1 ]'
+write '[bootstrap]' 'install_zsh = "yes"'
+settings_load "$F" 2>"$ERR"
+check "a TOML file gets no such hint"         '! grep -q "old bootstrap.conf format" "$ERR"'
+
+echo ">> legacy file leftovers"
+rm -rf "$WORK/mig2"; mkdir -p "$WORK/mig2"
+LEG2="$WORK/mig2/bootstrap.conf"
+NEW2="$WORK/mig2/config.toml"
+printf 'INSTALL_ZSH=yes\n' > "$LEG2"
+printf '[bootstrap]\n' > "$NEW2"
+settings_migrate_legacy "$LEG2" "$NEW2" >/dev/null 2>"$ERR"
+check "a bootstrap.conf left next to config.toml is called out" 'grep -q "is ignored" "$ERR"'
+settings_migrate_legacy "$NEW2" "$NEW2" >/dev/null 2>"$ERR"
+check "the same path is not reported as ignored"                '! grep -q "is ignored" "$ERR"'
+rm -f "$NEW2"
+printf 'OLDER\n' > "$LEG2.migrated"
+settings_migrate_legacy "$LEG2" "$NEW2" >/dev/null 2>&1
+check "an existing bootstrap.conf.migrated is kept"             '[ "$(cat "$LEG2.migrated")" = OLDER ]'
+check "the retired file gets another name"                      'grep -qx "INSTALL_ZSH=yes" "$LEG2.migrated.1"'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
