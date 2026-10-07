@@ -179,11 +179,14 @@ not with `omnishell set`, which the next run would overwrite.
 **Ghostty.** The `[ghostty]` values are written to the generated
 `~/.config/ghostty-settings.conf`, loaded after the tracked config and before your
 hand-written `~/.config/ghostty.local`.
+`font_size` must be above 0 and `background_opacity` between 0 and 1; other values
+are reported and ignored.
 
 The file is a small TOML subset (tables, strings, numbers, booleans, one-line
 arrays, `#` comments), parsed line by line and never executed; unknown tables, keys
 and invalid values are reported and ignored. An old `~/.config/dotfiles/bootstrap.conf`
-is converted once and renamed `bootstrap.conf.migrated`.
+is converted once and renamed `bootstrap.conf.migrated`. If a `bootstrap.conf` is
+still there next to an existing `config.toml`, the bootstrap warns and ignores it.
 
 ---
 
