@@ -18,8 +18,8 @@ fail() { printf '   FAIL %s\n' "$1"; failures=$((failures + 1)); }
 check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
 
 # the omnishell an upgrade would install
-NEW_OMNISHELL="$WORK/omnishell-0.6.0"
-printf '#!/bin/sh\n[ "$1" = version ] && echo "0.6.0 (commit abc, built now)"\n' > "$NEW_OMNISHELL"
+NEW_OMNISHELL="$WORK/omnishell-0.7.0"
+printf '#!/bin/sh\n[ "$1" = version ] && echo "0.7.0 (commit abc, built now)"\n' > "$NEW_OMNISHELL"
 chmod +x "$NEW_OMNISHELL"
 
 # a fresh stub dir (BIN) and HOME for each case
@@ -64,10 +64,10 @@ check "1.75.0 < 1.95 (different field counts)" '[ "$OUT" = no ]'
 
 echo ">> install_omnishell: current version"
 new_case current
-omnishell_stub "$BIN" 0.6.0
+omnishell_stub "$BIN" 0.7.0
 stub curl 'exit 1'
 run_fn install_omnishell
-check "0.6.0 is kept"                  '[ "$RC" = 0 ] && grep -q "already installed (0.6.0" <<< "$OUT"'
+check "0.7.0 is kept"                  '[ "$RC" = 0 ] && grep -q "already installed (0.7.0" <<< "$OUT"'
 check "no installer was fetched"       '! grep -q "^curl" "$CALLS"'
 
 echo ">> install_omnishell: too old, curl installer upgrades it"
@@ -77,7 +77,7 @@ omnishell_stub "$BIN" 0.5.0
 stub curl "echo 'mkdir -p \"\$HOME/.local/bin\"; cp \"$NEW_OMNISHELL\" \"\$HOME/.local/bin/omnishell\"'"
 run_fn install_omnishell
 check "old version triggers the upgrade" 'grep -q "^curl .*omnishell/main/install.sh" "$CALLS"'
-check "reports the upgrade"            'grep -q "below the minimum 0.6.0" <<< "$OUT"'
+check "reports the upgrade"            'grep -q "below the minimum 0.7.0" <<< "$OUT"'
 check "run succeeds"                   '[ "$RC" = 0 ]'
 
 echo ">> install_omnishell: too old and the upgrade does not help"
@@ -86,7 +86,7 @@ omnishell_stub "$BIN" 0.5.0
 stub curl 'echo true'
 run_fn install_omnishell
 check "stops instead of carrying on"   '[ "$RC" -ne 0 ]'
-check "names the version and the fix"  'grep -q "0.5.0" <<< "$OUT" && grep -q "0.6.0" <<< "$OUT"'
+check "names the version and the fix"  'grep -q "0.5.0" <<< "$OUT" && grep -q "0.7.0" <<< "$OUT"'
 
 echo ">> install_omnishell: Homebrew upgrades it"
 new_case brew
