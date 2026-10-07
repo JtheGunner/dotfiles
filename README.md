@@ -29,10 +29,11 @@ nothing is configured twice:
 | **`~/.zshrc.local` / `~/.bashrc.local`**                 | machine-specific and secret: per-host `PATH`, tool completions, tokens. **Not version-controlled.**                                                                                                                                              | sourced last by the same marker block                                                                     |
 
 omnishell is consumed as a released binary (Homebrew tap / curl installer); this
-repo never modifies it. **omnishell 0.6.0 or newer is required**: older releases
+repo never modifies it. **omnishell 0.7.0 or newer is required**: older releases
 don't know all of the `starship`, `root-loops`, `tmux`, `broot`, `direnv`, `mise` and
 `colorized-man` modules, and install `mise`, `starship` and `broot` with a long
-source build where no distro package exists. `bootstrap.sh` upgrades an older
+source build where no distro package exists, and 0.7.0 is the first with
+`omnishell tui`, which `--interactive` uses. `bootstrap.sh` upgrades an older
 install, or stops with a message if it can't.
 
 ```text
@@ -71,7 +72,7 @@ exec $SHELL
 `bootstrap.sh`:
 
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
-2. installs dependencies, omnishell (upgrading it below 0.6.0) and Ghostty, and zsh if you opted in (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
+2. installs dependencies, omnishell (upgrading it below 0.7.0) and Ghostty, and zsh if you opted in (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
 4. stows the packages
 5. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
@@ -82,6 +83,15 @@ exec $SHELL
 It never runs `chsh`, and re-running it is safe. An existing handwritten
 `~/.zshrc` is moved to `~/.zshrc.pre-dotfiles` first. Pass `--yes` to answer every
 prompt with "yes" (and skip the identity prompt). `--yes` never installs zsh.
+
+Pass `--interactive` to be asked instead of editing the settings file: it prompts
+for every `[bootstrap]`, `[ghostty]`, `[tmux]` and `[git]` key (Enter keeps the
+shown value, `-` unsets it, invalid answers are asked again), then opens
+`omnishell tui` for the module selection. Both are written to
+`~/.config/dotfiles/config.toml` as a diff you confirm; comments and unknown
+content stay, and the previous file is kept as `config.toml.bak`. It needs a
+terminal and cannot be combined with `--yes`. Answering `n` ends the run before
+anything is installed.
 
 > [!TIP]
 > Run it from whichever checkout you want to be live: it installs from there. If

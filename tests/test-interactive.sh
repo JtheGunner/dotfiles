@@ -125,6 +125,11 @@ fresh; : > "$WORK/omnishell.log"
 ix_run "" 'INTERACTIVE_FLAG=; interactive_settings; interactive_modules; echo AFTER'
 check "both steps do nothing without --interactive"         '[ "$RC" = 0 ] && grep -q AFTER <<< "$OUT" && [ ! -s "$WORK/omnishell.log" ] && cmp -s "$CONF" "$DOTFILES/config.toml.example"'
 
+echo ">> docs"
+check "the README names --interactive"                      'grep -q -- "--interactive" "$DOTFILES/README.md"'
+check "the README names the 0.7.0 floor"                    'grep -q "omnishell 0.7.0 or newer" "$DOTFILES/README.md" && ! grep -q "0\.6\.0" "$DOTFILES/README.md"'
+check "the template mentions --interactive"                 'grep -q -- "--interactive" "$DOTFILES/config.toml.example"'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
