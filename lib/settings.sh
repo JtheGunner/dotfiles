@@ -204,6 +204,61 @@ _settings_literal() {
   esac
 }
 
+# settings_update_file FILE CHANGES: FILE's text with the key changes applied, on
+# stdout. CHANGES is newline-separated table<US>key<US>literal, the literal being
+# TOML text ready to write; an empty literal clears the key. An active key line is
+# replaced in place (repeats collapse into the first), a missing key goes right
+# below its [table] header, a missing table is appended, a cleared key loses its
+# active line. Every other line - comments, commented template lines, tables and
+# keys the schema does not know - is copied as it is.
+settings_update_file() {
+  CHG="$2" awk -v us="$SETTINGS_US" '
+    function trim(s) { sub(/^[ \t\r]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
+    function header(line) { return line ~ /^[ \t]*\[[^\[].*\]/ }
+    function tname(line,   n) { n = line; sub(/^[ \t]*\[/, "", n); sub(/\].*$/, "", n); return trim(n) }
+    function keyof(line,   k) {
+      if (line !~ /^[ \t]*[A-Za-z0-9_-]+[ \t]*=/) return ""
+      k = line; sub(/^[ \t]*/, "", k); sub(/[ \t]*=.*$/, "", k); return k
+    }
+    BEGIN {
+      n = split(ENVIRON["CHG"], rows, "\n"); nc = 0
+      for (i = 1; i <= n; i++) {
+        if (rows[i] == "") continue
+        split(rows[i], f, us)
+        nc++; ct[nc] = f[1]; ck[nc] = f[2]; cl[nc] = f[3]
+        want[f[1], f[2]] = nc
+      }
+    }
+    FNR == NR {
+      if (header($0)) { t = tname($0); known[t] = 1 }
+      else if ((k = keyof($0)) != "") active[t, k] = 1
+      next
+    }
+    FNR == 1 { t = "" }
+    header($0) {
+      t = tname($0); print
+      for (i = 1; i <= nc; i++)
+        if (ct[i] == t && cl[i] != "" && !((t, ck[i]) in active) && !(i in done)) {
+          print ck[i] " = " cl[i]; done[i] = 1
+        }
+      next
+    }
+    (k = keyof($0)) != "" && ((t, k) in want) {
+      i = want[t, k]
+      if (!(i in done)) { if (cl[i] != "") print k " = " cl[i]; done[i] = 1 }
+      next
+    }
+    { print }
+    END {
+      for (i = 1; i <= nc; i++) {
+        if (cl[i] == "" || (ct[i] in known) || (ct[i] in tdone)) continue
+        print ""; print "[" ct[i] "]"; tdone[ct[i]] = 1
+        for (j = i; j <= nc; j++) if (ct[j] == ct[i] && cl[j] != "") print ck[j] " = " cl[j]
+      }
+    }
+  ' "$1" "$1"
+}
+
 # settings_load FILE: parse and validate into SETTINGS_RECORDS. [bootstrap] and
 # [ghostty] keys must be in the schema with the right type; omnishell and
 # modules.* tables pass through (omnishell validate checks those later).

@@ -358,6 +358,35 @@ check "email rejects a missing at-sign"           '! lit email nobody >/dev/null
 check "an empty answer is rejected"               '! lit string "" >/dev/null'
 check "a control character is rejected"           '! lit string "$(printf "a\tb")" >/dev/null'
 
+echo ">> settings_update_file"
+chg() { printf '%s\037%s\037%s\n' "$@"; }
+write '# top comment' '[tmux]' '# mouse is off here' 'mouse = false # was off' 'prefix = "C-a"' '' '[git]' 'user_name = "A"' '#editor = "vi"'
+OUT="$(settings_update_file "$F" "$(chg tmux mouse true)")"
+check "an active key is replaced in place"        'grep -qx "mouse = true" <<< "$OUT" && ! grep -q "mouse = false" <<< "$OUT"'
+check "the comment lines and other keys stay"     'grep -qx "# top comment" <<< "$OUT" && grep -qx "# mouse is off here" <<< "$OUT" && grep -qx "prefix = \"C-a\"" <<< "$OUT"'
+check "the key keeps its line"                    '[ "$(sed -n 4p <<< "$OUT")" = "mouse = true" ]'
+OUT="$(settings_update_file "$F" "$(chg tmux mode_keys '"vi"')")"
+check "a new key goes right below its header"     '[ "$(sed -n 3p <<< "$OUT")" = "mode_keys = \"vi\"" ]'
+OUT="$(settings_update_file "$F" "$(chg git editor '"nvim"')")"
+check "a commented template line is not touched"  'grep -qx "#editor = \"vi\"" <<< "$OUT" && grep -qx "editor = \"nvim\"" <<< "$OUT"'
+OUT="$(settings_update_file "$F" "$(chg ghostty font_size 14)")"
+check "a new table is appended after a blank line" '[ "$(tail -3 <<< "$OUT" | head -1)" = "" ] && [ "$(tail -2 <<< "$OUT" | head -1)" = "[ghostty]" ] && [ "$(tail -1 <<< "$OUT")" = "font_size = 14" ]'
+OUT="$(settings_update_file "$F" "$(chg tmux prefix '')")"
+check "an empty literal clears the key"           '! grep -q "^prefix" <<< "$OUT" && grep -qx "mouse = false # was off" <<< "$OUT"'
+OUT="$(settings_update_file "$F" "$(chg tmux prefix '' ; chg tmux mouse true; chg git user_name '"B"')")"
+check "several changes in one pass"               'grep -qx "mouse = true" <<< "$OUT" && grep -qx "user_name = \"B\"" <<< "$OUT" && ! grep -q "^prefix" <<< "$OUT"'
+OUT="$(settings_update_file "$F" "")"
+check "no changes print the file as it is"        '[ "$OUT" = "$(cat "$F")" ]'
+write '[tmux]' 'mouse = false' 'mouse = true' 'prefix = "C-b"'
+OUT="$(settings_update_file "$F" "$(chg tmux mouse false)")"
+check "a repeated key collapses to one line"      '[ "$(grep -c "^mouse" <<< "$OUT")" = 1 ]'
+write '[bootstrap]' 'install_zsh = "ask"' '[modules.fzf]' 'enabled = true'
+OUT="$(settings_update_file "$F" "$(chg bootstrap terminals '["foot"]')")"
+check "an unknown table stays untouched"          'grep -qx "\[modules.fzf\]" <<< "$OUT" && grep -qx "enabled = true" <<< "$OUT"'
+printf '%s\n' "$OUT" > "$WORK/updated.toml"
+settings_load "$WORK/updated.toml" 2>/dev/null
+check "the updated file loads back"               '[ "$(settings_get bootstrap.terminals)" = foot ] && [ "$(settings_get bootstrap.install_zsh)" = ask ]'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
