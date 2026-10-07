@@ -123,6 +123,53 @@ settings_load "$WORK/missing.toml" 2>"$ERR"
 check "a missing file is not an error" '[ $? -eq 0 ] && [ -z "$(settings_get bootstrap.install_zsh)" ] && [ ! -s "$ERR" ]'
 check "the schema lists every key" '[ "$(settings_schema_keys | tr "\n" " ")" = "bootstrap.install_zsh bootstrap.assume_yes bootstrap.terminals ghostty.keybinds ghostty.font_family ghostty.font_size ghostty.background_opacity " ]'
 
+echo ">> omnishell merge"
+DEFAULT="$WORK/default.toml"
+cat > "$DEFAULT" <<'TOML'
+# omnishell configuration (top comment)
+
+[omnishell]
+version = 1
+shells = ["zsh", "bash"]
+
+[modules.history]
+enabled = true
+[modules.history.options]
+size = 50000
+
+# Prompt: keep this note
+[modules.starship]
+enabled = true
+TOML
+merge() { settings_load "$F" 2>/dev/null; settings_merge_omnishell "$DEFAULT"; }
+headers() { grep '^\[' <<< "$1" | tr '\n' ' '; }
+
+write '[bootstrap]' 'install_zsh = "yes"'
+check "no omnishell overrides: output equals the default" 'merge | cmp -s - "$DEFAULT"'
+
+write '[modules.history.options]' 'size = 10'
+OUT="$(merge)"
+check "an override replaces the table"       'grep -qx "size = 10" <<< "$OUT" && ! grep -q 50000 <<< "$OUT"'
+check "other tables stay"                    'grep -qx "enabled = true" <<< "$OUT" && grep -q "^\[modules.starship\]" <<< "$OUT"'
+check "comments stay, also above a table"    'grep -q "top comment" <<< "$OUT" && grep -q "keep this note" <<< "$OUT"'
+check "table order is kept"                  '[ "$(headers "$OUT")" = "[omnishell] [modules.history] [modules.history.options] [modules.starship] " ]'
+
+write '[modules.zoxide]' 'enabled = true'
+OUT="$(merge)"
+check "a new table is appended last"         '[ "$(headers "$OUT")" = "[omnishell] [modules.history] [modules.history.options] [modules.starship] [modules.zoxide] " ]'
+check "the default stays intact before it"   '[ "$(head -n "$(wc -l < "$DEFAULT")" <<< "$OUT")" = "$(cat "$DEFAULT")" ]'
+
+write '[omnishell]' 'version = 1' 'shells = ["zsh"]'
+OUT="$(merge)"
+check "an [omnishell] override replaces the whole table" 'grep -qx "shells = \[\"zsh\"\]" <<< "$OUT" && ! grep -q "bash" <<< "$OUT"'
+check "the comment above the replaced table stays"        'grep -q "top comment" <<< "$OUT"'
+
+write '[modules.fzf.options]' 'default_opts = "--height 40% --border"' 'ctrl_r = true' 'depth = [1, 2]' 'q = "a\"b"' 'q = "c\\d"'
+OUT="$(merge)"
+check "strings are re-quoted"                'grep -qxF "default_opts = \"--height 40% --border\"" <<< "$OUT"'
+check "booleans and arrays of numbers"       'grep -qx "ctrl_r = true" <<< "$OUT" && grep -qx "depth = \[1, 2\]" <<< "$OUT"'
+check "a duplicate key keeps the last value, once" 'grep -qxF "q = \"c\\\\d\"" <<< "$OUT" && [ "$(grep -c "^q = " <<< "$OUT")" = 1 ]'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
