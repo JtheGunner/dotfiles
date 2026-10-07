@@ -89,7 +89,7 @@ settings_parse() {
     line ~ /^\[/ {
       if (line !~ /^\[[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*\]$/) { warn("invalid table header"); skip = 1; table = ""; next }
       table = substr(line, 2, length(line) - 2)
-      if (table != "bootstrap" && table != "ghostty" && table != "omnishell" && table !~ /^modules\./) {
+      if (table != "bootstrap" && table != "ghostty" && table != "tmux" && table != "git" && table != "omnishell" && table !~ /^modules\./) {
         warn("unknown table [" table "]"); skip = 1; next
       }
       skip = 0; next
@@ -110,13 +110,27 @@ settings_parse() {
 
 # Known keys of [bootstrap] and [ghostty], with the value type each one takes:
 #   enum:a,b,c | bool | list | string | number | positive (> 0) | fraction (0 to 1)
+#   | nonneg (integer >= 0) | posint (integer > 0) | tmuxkey | email
 SETTINGS_SCHEMA='bootstrap.install_zsh enum:yes,no,ask
 bootstrap.assume_yes bool
 bootstrap.terminals list
 ghostty.keybinds enum:auto,mac,linux
 ghostty.font_family string
 ghostty.font_size positive
-ghostty.background_opacity fraction'
+ghostty.background_opacity fraction
+tmux.prefix tmuxkey
+tmux.mouse bool
+tmux.mode_keys enum:vi,emacs
+tmux.base_index nonneg
+tmux.escape_time nonneg
+tmux.history_limit posint
+tmux.status_position enum:top,bottom
+git.user_name string
+git.user_email email
+git.signing_key string
+git.default_branch string
+git.editor string
+git.pull_rebase bool'
 
 settings_schema_keys() { printf '%s\n' "$SETTINGS_SCHEMA" | awk '{ print $1 }'; }
 
@@ -134,6 +148,19 @@ _settings_value_ok() {
     number) [ "$2" = int ] || [ "$2" = float ] ;;
     positive) { [ "$2" = int ] || [ "$2" = float ]; } && awk -v v="$3" 'BEGIN { exit !(v > 0) }' ;;
     fraction) { [ "$2" = int ] || [ "$2" = float ]; } && awk -v v="$3" 'BEGIN { exit !(v >= 0 && v <= 1) }' ;;
+    nonneg) [ "$2" = int ] && [ "$3" -ge 0 ] ;;
+    posint) [ "$2" = int ] && [ "$3" -gt 0 ] ;;
+    tmuxkey) [ "$2" = str ] || return 1
+             case "$3" in
+               C-[A-Za-z0-9] | M-[A-Za-z0-9] | C-Space | M-Space | F[1-9] | F1[0-2]) return 0 ;;
+             esac
+             return 1 ;;
+    email) [ "$2" = str ] || return 1
+           case "$3" in
+             *" "* | *$'\t'* | @* | *@) return 1 ;;
+             *?@?*) return 0 ;;
+           esac
+           return 1 ;;
     *) return 1 ;;
   esac
 }
@@ -152,7 +179,7 @@ settings_load() {
   fi
   while IFS="$SETTINGS_US" read -r table key kind value; do
     case "$table" in
-      bootstrap | ghostty)
+      bootstrap | ghostty | tmux | git)
         type="$(_settings_type "$table.$key")"
         if [ -z "$type" ]; then
           warn "$1: unknown key '$key' in [$table] - ignored"

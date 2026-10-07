@@ -121,7 +121,7 @@ check "the last assignment wins" '[ "$(settings_get bootstrap.install_zsh)" = ye
 
 settings_load "$WORK/missing.toml" 2>"$ERR"
 check "a missing file is not an error" '[ $? -eq 0 ] && [ -z "$(settings_get bootstrap.install_zsh)" ] && [ ! -s "$ERR" ]'
-check "the schema lists every key" '[ "$(settings_schema_keys | tr "\n" " ")" = "bootstrap.install_zsh bootstrap.assume_yes bootstrap.terminals ghostty.keybinds ghostty.font_family ghostty.font_size ghostty.background_opacity " ]'
+check "the schema lists every key" '[ "$(settings_schema_keys | tr "\n" " ")" = "bootstrap.install_zsh bootstrap.assume_yes bootstrap.terminals ghostty.keybinds ghostty.font_family ghostty.font_size ghostty.background_opacity tmux.prefix tmux.mouse tmux.mode_keys tmux.base_index tmux.escape_time tmux.history_limit tmux.status_position git.user_name git.user_email git.signing_key git.default_branch git.editor git.pull_rebase " ]'
 
 echo ">> omnishell merge"
 DEFAULT="$WORK/default.toml"
@@ -255,6 +255,38 @@ printf 'OLDER\n' > "$LEG2.migrated"
 settings_migrate_legacy "$LEG2" "$NEW2" >/dev/null 2>&1
 check "an existing bootstrap.conf.migrated is kept"             '[ "$(cat "$LEG2.migrated")" = OLDER ]'
 check "the retired file gets another name"                      'grep -qx "INSTALL_ZSH=yes" "$LEG2.migrated.1"'
+
+echo ">> tmux and git keys"
+val() {   # <table> <key> <toml value> -> the value settings_get returns, empty when rejected
+  write "[$1]" "$2 = $3"
+  settings_load "$F" 2>/dev/null
+  settings_get "$1.$2"
+}
+for k in 'C-b' 'M-a' 'C-Space' 'F5' 'F12'; do
+  check "tmux.prefix accepts $k" "[ \"\$(val tmux prefix '\"$k\"')\" = '$k' ]"
+done
+for k in 'ctrl-b' 'C-ab' 'F13' ''; do
+  check "tmux.prefix rejects '$k'" "[ -z \"\$(val tmux prefix '\"$k\"')\" ]"
+done
+check "tmux.mouse accepts a boolean"          '[ "$(val tmux mouse false)" = false ]'
+check "tmux.mouse rejects a string"           '[ -z "$(val tmux mouse "\"yes\"")" ]'
+check "tmux.mode_keys accepts emacs"          '[ "$(val tmux mode_keys "\"emacs\"")" = emacs ]'
+check "tmux.mode_keys rejects nano"           '[ -z "$(val tmux mode_keys "\"nano\"")" ]'
+check "tmux.base_index accepts 0"             '[ "$(val tmux base_index 0)" = 0 ]'
+check "tmux.base_index rejects -1"            '[ -z "$(val tmux base_index -1)" ]'
+check "tmux.base_index rejects a string"      '[ -z "$(val tmux base_index "\"1\"")" ]'
+check "tmux.escape_time accepts 0"            '[ "$(val tmux escape_time 0)" = 0 ]'
+check "tmux.history_limit accepts 50000"      '[ "$(val tmux history_limit 50000)" = 50000 ]'
+check "tmux.history_limit rejects 0"          '[ -z "$(val tmux history_limit 0)" ]'
+check "tmux.status_position accepts top"      '[ "$(val tmux status_position "\"top\"")" = top ]'
+check "tmux.status_position rejects middle"   '[ -z "$(val tmux status_position "\"middle\"")" ]'
+check "git.user_email accepts a@b.c"          '[ "$(val git user_email "\"a@b.c\"")" = a@b.c ]'
+check "git.user_email rejects a space"        '[ -z "$(val git user_email "\"a b@c.d\"")" ]'
+check "git.user_email rejects no @"           '[ -z "$(val git user_email "\"nobody\"")" ]'
+check "git.user_email rejects a bare @"       '[ -z "$(val git user_email "\"@\"")" ]'
+check "git.pull_rebase accepts a boolean"     '[ "$(val git pull_rebase true)" = true ]'
+check "git.default_branch accepts a string"   '[ "$(val git default_branch "\"trunk\"")" = trunk ]'
+check "git.editor accepts a string"           '[ "$(val git editor "\"nvim -f\"")" = "nvim -f" ]'
 
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
