@@ -234,6 +234,43 @@ check "a hand-written file is left untouched"      '[ "$(gitc core.editor)" = vi
 check "the tracked git config includes delta, settings, local in order" \
   '[ "$(grep "path = " "$DOTFILES/git/.config/git/config" | tr -d "\t " | tr "\n" " ")" = "path=~/.gitconfig.delta path=~/.gitconfig.settings path=~/.gitconfig.local " ]'
 
+echo ">> render failures are warnings, never fatal"
+fresh; conf '[git]' 'user_name = "A"'
+: > "$WORK/home/.gitconfig.settings.lock"
+sh_run '' 'render_git_settings'
+check "a leftover .lock file does not stop the git render" '[ "$RC" = 0 ] && [ "$(gitc user.name)" = A ]'
+fresh; conf '[tmux]' 'mouse = false'
+rm -rf "$WORK/home/.config"; : > "$WORK/home/.config"
+sh_run '' 'render_tmux_settings; echo after'
+check "an unwritable tmux target is a warning"     '[ "$RC" = 0 ] && grep -q after <<< "$OUT" && grep -q "could not write" "$WORK/err"'
+fresh; conf '[ghostty]' 'font_size = 13'
+rm -rf "$WORK/home/.config"; : > "$WORK/home/.config"
+sh_run '' 'render_ghostty_settings; echo after'
+check "an unwritable ghostty target is a warning"  '[ "$RC" = 0 ] && grep -q after <<< "$OUT" && grep -q "could not write" "$WORK/err"'
+
+echo ">> git identity from the settings"
+ident() {   # <config lines...>: render the settings, then run the identity step non-interactively
+  fresh; conf "$@"
+  printf '[include]\n\tpath = %s\n' "$WORK/home/.gitconfig.settings" > "$WORK/home/.gitconfig"
+  sh_run "ASSUME_YES=1 GIT_CONFIG_NOSYSTEM=1 XDG_CONFIG_HOME=$WORK/home/.config" 'render_git_settings; setup_git_identity'
+}
+ident '[git]' 'user_email = "a@b.c"'
+check "only user_email set: the identity is not called complete" '! grep -q "already set" <<< "$OUT"'
+check "only user_email set: user.name is named as missing"       'grep -q "user.name" "$WORK/err"'
+ident '[git]' 'user_name = "A"'
+check "only user_name set: user.email is named as missing"       '! grep -q "already set" <<< "$OUT" && grep -q "user.email" "$WORK/err"'
+ident '[git]' 'user_name = "A"' 'user_email = "a@b.c"'
+check "both set: the identity is complete"                       'grep -q "already set (a@b.c)" <<< "$OUT"'
+
+echo ">> ~/.gitconfig.local overriding the settings"
+fresh; conf '[git]' 'user_email = "new@x.y"'
+printf '[user]\n\temail = old@x.y\n' > "$WORK/home/.gitconfig.local"
+sh_run '' 'render_git_settings'
+check "an overriding value in ~/.gitconfig.local is called out"  'grep -q "user.email is also set in" "$WORK/err"'
+fresh; conf '[git]' 'user_email = "new@x.y"'
+sh_run '' 'render_git_settings'
+check "no warning without a local override"                      '! grep -q "also set in" "$WORK/err"'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
