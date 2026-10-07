@@ -47,7 +47,7 @@ check "both send a newline on shift+enter" \
 
 echo ">> bootstrap"
 mkdir -p "$WORK/bin"
-for tool in ln rm cat mkdir basename dirname uname id readlink; do
+for tool in ln rm cat mkdir basename dirname uname id readlink awk mv tr; do
   ln -s "$(command -v "$tool")" "$WORK/bin/$tool"
 done
 # run setup_ghostty_keybinds as <os> with an optional override, in a fresh $HOME

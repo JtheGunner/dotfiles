@@ -71,7 +71,7 @@ exec $SHELL
 `bootstrap.sh`:
 
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
-2. installs dependencies, omnishell (upgrading it below 0.6.0) and Ghostty, and zsh if you opted in (see [Bootstrap configuration](#-bootstrap-configuration)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
+2. installs dependencies, omnishell (upgrading it below 0.6.0) and Ghostty, and zsh if you opted in (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
 4. stows the packages
 5. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
@@ -131,36 +131,59 @@ stow git tmux bat # only the packages you want
 
 ---
 
-## ⚙️ Bootstrap configuration
+## ⚙️ Settings file
 
-Every bootstrap option can live in one untracked, per-machine file:
-`~/.config/dotfiles/bootstrap.conf`. The first run copies
-[`bootstrap.conf.example`](bootstrap.conf.example) there with every option
-commented out, so the file itself shows what is available. An existing file is
-never overwritten. Point `DOTFILES_CONFIG` at another path to use a different file.
+Every per-machine choice lives in one untracked file:
+`~/.config/dotfiles/config.toml`. The first run copies
+[`config.toml.example`](config.toml.example) there with every option commented
+out, so the file itself shows what is available. An existing file is never
+overwritten. Point `DOTFILES_CONFIG` at another path to use a different file.
 
-| Key           | Values                | Default | Command line                         | Environment             |
-|---------------|-----------------------|---------|--------------------------------------|-------------------------|
-| `INSTALL_ZSH` | `yes` · `no` · `ask`  | `ask`   | `--install-zsh` / `--no-install-zsh` | `DOTFILES_INSTALL_ZSH`  |
-| `ASSUME_YES`  | `yes` · `no`          | `no`    | `--yes`                              | `DOTFILES_ASSUME_YES`   |
-| `TERMINALS`   | space-separated names | none    | -                                    | `DOTFILES_TERMINALS`    |
+| Table / key                        | Values                          | Default | Command line                         | Environment             |
+|------------------------------------|---------------------------------|---------|--------------------------------------|-------------------------|
+| `[bootstrap]` `install_zsh`        | `"yes"` · `"no"` · `"ask"`      | `"ask"` | `--install-zsh` / `--no-install-zsh` | `DOTFILES_INSTALL_ZSH`  |
+| `[bootstrap]` `assume_yes`         | `true` · `false`                | `false` | `--yes`                              | `DOTFILES_ASSUME_YES`   |
+| `[bootstrap]` `terminals`          | list of package names           | `[]`    | -                                    | `DOTFILES_TERMINALS`    |
+| `[ghostty]` `keybinds`             | `"auto"` · `"mac"` · `"linux"`  | `"auto"`| -                                    | `DOTFILES_GHOSTTY_KEYBINDS` |
+| `[ghostty]` `font_family`, `font_size`, `background_opacity` | string, number, number | the tracked Ghostty config | - | - |
+| `[omnishell]`, `[modules.*]`       | omnishell's own config          | `omnishell/config.toml` | - | - |
 
-Precedence: command line, then environment, then config file, then the default.
+Precedence: command line, then environment, then the settings file, then the default.
 
-```sh
-# ~/.config/dotfiles/bootstrap.conf
-INSTALL_ZSH=yes
-TERMINALS=alacritty kitty
+```toml
+# ~/.config/dotfiles/config.toml
+[bootstrap]
+install_zsh = "yes"
+terminals = ["alacritty", "kitty"]
+
+[ghostty]
+font_size = 13
+
+[modules.history.options]
+size = 10000
 ```
 
 > [!NOTE]
-> zsh is installed only on an **explicit "yes"**; `--yes` / `ASSUME_YES` alone never
-> installs it. With `ask` (the default), `bootstrap.sh` prompts when a terminal is
+> zsh is installed only on an **explicit "yes"**; `--yes` / `assume_yes` alone never
+> installs it. With `"ask"` (the default), `bootstrap.sh` prompts when a terminal is
 > available and otherwise prints a hint and carries on, so bash stays fully usable.
 > zsh is installed with `brew` or `apt-get`; `chsh` is never run.
 
-The file is parsed line by line (`KEY=value`, `#` comments), never executed;
-unknown keys and invalid values are reported and ignored.
+**omnishell.** `omnishell/config.toml` stays the tracked default. A table in your
+settings file replaces the whole table of the same name, so restate every key you
+want to keep; tables the default does not have are added. The merged result is
+written to `~/.config/omnishell/config.toml` on every run and checked with
+`omnishell validate`; an invalid result stops the bootstrap. Change modules here,
+not with `omnishell set`, which the next run would overwrite.
+
+**Ghostty.** The `[ghostty]` values are written to the generated
+`~/.config/ghostty-settings.conf`, loaded after the tracked config and before your
+hand-written `~/.config/ghostty.local`.
+
+The file is a small TOML subset (tables, strings, numbers, booleans, one-line
+arrays, `#` comments), parsed line by line and never executed; unknown tables, keys
+and invalid values are reported and ignored. An old `~/.config/dotfiles/bootstrap.conf`
+is converted once and renamed `bootstrap.conf.migrated`.
 
 ---
 
@@ -325,8 +348,8 @@ adding or removing files in a package, run `make restow`.
 | 📝 | `nvim/`    | `~/.config/nvim/`                      | opt-in: only stowed if the directory exists                                                                                                       |
 
 Stow a subset with `cd ~/.dotfiles && stow git tmux`; add an extra terminal
-package via `DOTFILES_TERMINALS="alacritty kitty" ./bootstrap.sh` or `TERMINALS` in the
-[bootstrap config](#-bootstrap-configuration).
+package via `DOTFILES_TERMINALS="alacritty kitty" ./bootstrap.sh` or `terminals` in the
+[settings file](#-settings-file).
 
 Per-machine Ghostty overrides go in `~/.config/ghostty.local` (optional, outside
 the stowed directory).
@@ -405,7 +428,8 @@ with [gitleaks](https://github.com/gitleaks/gitleaks).
 
 ```text
 bootstrap.sh              one-shot installer
-bootstrap.conf.example    template for ~/.config/dotfiles/bootstrap.conf (all options, commented out)
+config.toml.example       template for ~/.config/dotfiles/config.toml (all options, commented out)
+lib/settings.sh           settings file parser, omnishell merge and migration (sourced by bootstrap.sh)
 Makefile                  stow / colors / lint / test wrappers
 omnishell/config.toml     version-controlled omnishell config
 zsh/zshrc.zsh             rc library sourced by the generated ~/.zshrc (not stowed)

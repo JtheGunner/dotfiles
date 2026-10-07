@@ -18,10 +18,11 @@ check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
 
 PACKAGES="zsh git tmux bat ghostty"
 
-# a fake checkout: this repo's bootstrap.sh + its stow packages
+# a fake checkout: this repo's bootstrap.sh, its lib/ and its stow packages
 make_checkout() {
   mkdir -p "$1"
   cp "$REPO/bootstrap.sh" "$1/"
+  cp -R "$REPO/lib" "$1/"
   for pkg in $PACKAGES; do cp -R "$REPO/$pkg" "$1/"; done
 }
 make_checkout "$WORK/A"
