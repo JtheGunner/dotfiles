@@ -14,8 +14,10 @@ SETTINGS_RS=$'\036'
 SETTINGS_FILE=""
 SETTINGS_RECORDS=""
 
-if ! command -v warn >/dev/null 2>&1; then warn() { printf 'warn: %s\n' "$*" >&2; }; fi
-if ! command -v log >/dev/null 2>&1; then log() { printf '==> %s\n' "$*"; }; fi
+# fall back to simple helpers when the caller (bootstrap.sh) has not defined them;
+# `command -v` would find /usr/bin/log on macOS, so ask for a shell function
+if [ "$(type -t warn)" != function ]; then warn() { printf 'warn: %s\n' "$*" >&2; }; fi
+if [ "$(type -t log)" != function ]; then log() { printf '==> %s\n' "$*"; }; fi
 
 # settings_parse FILE: syntax check and normalisation. Records go to stdout; every
 # rejected line becomes "FILE:LINE: <reason> - ignored" on stderr.
@@ -248,4 +250,58 @@ settings_merge_omnishell() {
       for (i = 1; i <= no; i++) if (!(oorder[i] in used)) printf "\n%s", otext[oorder[i]]
     }
   ' "$1"
+}
+
+# Ghostty `key = value` lines for the [ghostty] values that are set. `keybinds`
+# is not rendered: setup_ghostty_keybinds links the matching keybinds file.
+settings_render_ghostty() {
+  local v
+  v="$(settings_get ghostty.font_family)"
+  if [ -n "$v" ]; then
+    v="${v//\\/\\\\}"; v="${v//\"/\\\"}"
+    printf 'font-family = "%s"\n' "$v"
+  fi
+  v="$(settings_get ghostty.font_size)"
+  [ -z "$v" ] || printf 'font-size = %s\n' "$v"
+  v="$(settings_get ghostty.background_opacity)"
+  [ -z "$v" ] || printf 'background-opacity = %s\n' "$v"
+}
+
+# settings_migrate_legacy LEGACY NEW: one-time conversion of the old KEY=value
+# bootstrap.conf. Only runs when LEGACY exists and NEW does not. A legacy file
+# without an active key (the seeded template) is renamed, not converted.
+settings_migrate_legacy() {
+  local legacy="$1" new="$2" line key value t list="" install="" assume="" terminals=""
+  { [ -f "$legacy" ] && [ ! -e "$new" ]; } || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%%#*}"
+    case "$line" in *=*) ;; *) continue ;; esac
+    key="${line%%=*}"; key="${key//[[:space:]]/}"
+    value="${line#*=}"
+    value="${value#"${value%%[![:space:]]*}"}"; value="${value%"${value##*[![:space:]]}"}"
+    case "$key" in
+      INSTALL_ZSH) case "$value" in yes | no | ask) install="$value" ;; esac ;;
+      ASSUME_YES) case "$value" in yes) assume=true ;; no) assume=false ;; esac ;;
+      TERMINALS) terminals="$value" ;;
+    esac
+  done < "$legacy"
+  for t in $terminals; do
+    case "$t" in
+      *[!A-Za-z0-9_.-]*) warn "$legacy: skipped terminal '$t' (not a valid package name)" ;;
+      *) list="${list:+$list, }\"$t\"" ;;
+    esac
+  done
+  if [ -z "$install$assume$list" ]; then
+    mv "$legacy" "$legacy.migrated"
+    return 0
+  fi
+  mkdir -p "$(dirname "$new")"
+  {
+    printf '# Migrated from bootstrap.conf. config.toml.example lists every option.\n[bootstrap]\n'
+    [ -z "$install" ] || printf 'install_zsh = "%s"\n' "$install"
+    [ -z "$assume" ] || printf 'assume_yes = %s\n' "$assume"
+    [ -z "$list" ] || printf 'terminals = [%s]\n' "$list"
+  } > "$new"
+  mv "$legacy" "$legacy.migrated"
+  log "migrated $legacy to $new"
 }

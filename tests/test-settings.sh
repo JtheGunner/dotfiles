@@ -170,6 +170,46 @@ check "strings are re-quoted"                'grep -qxF "default_opts = \"--heig
 check "booleans and arrays of numbers"       'grep -qx "ctrl_r = true" <<< "$OUT" && grep -qx "depth = \[1, 2\]" <<< "$OUT"'
 check "a duplicate key keeps the last value, once" 'grep -qxF "q = \"c\\\\d\"" <<< "$OUT" && [ "$(grep -c "^q = " <<< "$OUT")" = 1 ]'
 
+echo ">> ghostty rendering"
+write '[ghostty]' 'font_family = "Cascadia Mono NF"' 'font_size = 13' 'background_opacity = 0.9' 'keybinds = "linux"'
+settings_load "$F" 2>/dev/null
+OUT="$(settings_render_ghostty)"
+check "renders the three values, no keybinds" '[ "$OUT" = "font-family = \"Cascadia Mono NF\"
+font-size = 13
+background-opacity = 0.9" ]'
+write '[ghostty]' 'keybinds = "linux"'
+settings_load "$F" 2>/dev/null
+check "renders nothing without rendered keys" '[ -z "$(settings_render_ghostty)" ]'
+write '[ghostty]' 'font_family = "A \"B\" \\ C"'
+settings_load "$F" 2>/dev/null
+check "quotes and backslashes are escaped" '[ "$(settings_render_ghostty)" = "font-family = \"A \\\"B\\\" \\\\ C\"" ]'
+
+echo ">> legacy migration"
+mkdir -p "$WORK/mig"
+LEG="$WORK/mig/bootstrap.conf"
+NEW="$WORK/mig/config.toml"
+printf '# note\nINSTALL_ZSH = yes # why\nASSUME_YES=no\nTERMINALS=alacritty kitty bad"name\n' > "$LEG"
+settings_migrate_legacy "$LEG" "$NEW" >/dev/null 2>"$ERR"
+settings_load "$NEW" 2>/dev/null
+check "writes config.toml"                  '[ -f "$NEW" ]'
+check "INSTALL_ZSH is migrated"             '[ "$(settings_get bootstrap.install_zsh)" = yes ]'
+check "ASSUME_YES=no becomes false"         '[ "$(settings_get bootstrap.assume_yes)" = false ]'
+check "TERMINALS becomes a list"            '[ "$(settings_get bootstrap.terminals)" = "alacritty kitty" ]'
+check "an invalid terminal name is skipped with a warning" 'grep -q "bad" "$ERR"'
+check "the legacy file is renamed"          '[ ! -e "$LEG" ] && [ -f "$LEG.migrated" ]'
+
+rm -f "$NEW" "$LEG.migrated"
+printf '# INSTALL_ZSH=ask\n#TERMINALS=\n' > "$LEG"
+settings_migrate_legacy "$LEG" "$NEW" >/dev/null 2>&1
+check "a commented-out legacy file creates no config.toml" '[ ! -e "$NEW" ] && [ -f "$LEG.migrated" ]'
+
+rm -f "$LEG.migrated"
+printf 'INSTALL_ZSH=yes\n' > "$LEG"
+printf '[bootstrap]\nassume_yes = true\n' > "$NEW"
+cp "$NEW" "$NEW.bak"
+settings_migrate_legacy "$LEG" "$NEW" >/dev/null 2>&1
+check "an existing config.toml is never touched" 'cmp -s "$NEW" "$NEW.bak" && [ -f "$LEG" ]'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
