@@ -381,6 +381,73 @@ settings_merge_omnishell() {
   ' "$1"
 }
 
+# sorted records of one table of FILE
+_settings_table_records() {
+  settings_parse "$1" 2>/dev/null | awk -F"$SETTINGS_US" -v t="$2" '$1 == t' | sort
+}
+
+# settings_omnishell_changes LIVE DEFAULT FILE: "set NAME" or "drop NAME" for every
+# omnishell / modules.* table of LIVE that differs from what FILE says today (its
+# own table of that name, else the one in DEFAULT). A table equal to DEFAULT's is
+# dropped from FILE, any other one is set whole.
+settings_omnishell_changes() {
+  local live="$1" default="$2" file="$3" t now cur
+  while IFS= read -r t; do
+    now="$(_settings_table_records "$live" "$t")"
+    cur="$(_settings_table_records "$file" "$t")"
+    [ -n "$cur" ] || cur="$(_settings_table_records "$default" "$t")"
+    [ "$now" = "$cur" ] && continue
+    if [ "$now" = "$(_settings_table_records "$default" "$t")" ]; then echo "drop $t"; else echo "set $t"; fi
+  done < <(settings_parse "$live" 2>/dev/null |
+    awk -F"$SETTINGS_US" '($1 == "omnishell" || $1 ~ /^modules\./) && !($1 in seen) { seen[$1] = 1; print $1 }')
+}
+
+# settings_update_omnishell FILE LIVE DEFAULT: FILE's text with the omnishell
+# tables of LIVE taken over (see settings_omnishell_changes), on stdout. A "set"
+# table replaces the table of that name as a whole, or is appended; a "drop" table
+# is removed. Blank and comment lines right above the next table stay where they are.
+settings_update_omnishell() {
+  local file="$1" live="$2" default="$3" changes sets drops saved blocks
+  changes="$(settings_omnishell_changes "$live" "$default" "$file")"
+  if [ -z "$changes" ]; then cat "$file"; return 0; fi
+  sets="$(printf '%s\n' "$changes" | awk '$1 == "set" { printf "%s ", $2 }')"
+  drops="$(printf '%s\n' "$changes" | awk '$1 == "drop" { printf "%s ", $2 }')"
+  saved="$SETTINGS_RECORDS"
+  SETTINGS_RECORDS="$(settings_parse "$live" 2>/dev/null |
+    awk -F"$SETTINGS_US" -v sel="$sets" 'BEGIN { n = split(sel, a, " "); for (i = 1; i <= n; i++) w[a[i]] = 1 } ($1 in w)')"$'\n'
+  blocks="$(_settings_omnishell_blocks)"
+  SETTINGS_RECORDS="$saved"
+  OVR="$blocks" DROP="$drops" awk '
+    function blank_or_comment(s) { return s ~ /^[ \t]*(#.*)?$/ }
+    function header(line) { return line ~ /^[ \t]*\[[^\[].*\]/ }
+    function tname(line,   n) { n = line; sub(/^[ \t]*\[/, "", n); sub(/\].*$/, "", n); gsub(/^[ \t]+|[ \t]+$/, "", n); return n }
+    BEGIN {
+      n = split(ENVIRON["OVR"], ol, "\n"); cur = ""
+      for (i = 1; i <= n; i++) {
+        if (ol[i] ~ /^\[/) { cur = substr(ol[i], 2, length(ol[i]) - 2); oorder[++no] = cur; otext[cur] = ol[i] "\n" }
+        else if (ol[i] != "") otext[cur] = otext[cur] ol[i] "\n"
+      }
+      m = split(ENVIRON["DROP"], dl, " ")
+      for (i = 1; i <= m; i++) if (dl[i] != "") drop[dl[i]] = 1
+      skipping = 0; pend = ""
+    }
+    header($0) {
+      printf "%s", pend; pend = ""; skipping = 0
+      name = tname($0)
+      if (name in used) { skipping = 1; next }
+      if (name in otext) { printf "%s", otext[name]; used[name] = 1; skipping = 1; next }
+      if (name in drop) { skipping = 1; next }
+      print; next
+    }
+    skipping { if (blank_or_comment($0)) pend = pend $0 "\n"; else pend = ""; next }
+    { print }
+    END {
+      printf "%s", pend
+      for (i = 1; i <= no; i++) if (!(oorder[i] in used)) printf "\n%s", otext[oorder[i]]
+    }
+  ' "$file"
+}
+
 # Ghostty `key = value` lines for the [ghostty] values that are set. `keybinds`
 # is not rendered: setup_ghostty_keybinds links the matching keybinds file.
 settings_render_ghostty() {

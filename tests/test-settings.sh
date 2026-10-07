@@ -387,6 +387,36 @@ printf '%s\n' "$OUT" > "$WORK/updated.toml"
 settings_load "$WORK/updated.toml" 2>/dev/null
 check "the updated file loads back"               '[ "$(settings_get bootstrap.terminals)" = foot ] && [ "$(settings_get bootstrap.install_zsh)" = ask ]'
 
+echo ">> omnishell tables: changes and update"
+DEF="$WORK/default.toml"; LIVE="$WORK/live.toml"
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.starship]' 'enabled = true' '' '[modules.fzf]' 'enabled = true' > "$DEF"
+write '[bootstrap]' 'install_zsh = "ask"'
+cp "$DEF" "$LIVE"
+check "an untouched live config has no changes"    '[ -z "$(settings_omnishell_changes "$LIVE" "$DEF" "$F")" ]'
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.starship]' 'enabled = true' '' '[modules.fzf]' 'enabled = false' '' '[modules.broot]' 'enabled = true' > "$LIVE"
+OUT="$(settings_omnishell_changes "$LIVE" "$DEF" "$F")"
+check "a changed and a new table are set"          'grep -qx "set modules.fzf" <<< "$OUT" && grep -qx "set modules.broot" <<< "$OUT" && [ "$(grep -c . <<< "$OUT")" = 2 ]'
+OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
+check "the changed table is appended whole"        'grep -qx "\[modules.fzf\]" <<< "$OUT" && grep -qx "enabled = false" <<< "$OUT" && grep -qx "\[modules.broot\]" <<< "$OUT"'
+check "the other tables of the file stay"          'grep -qx "\[bootstrap\]" <<< "$OUT" && grep -qx "install_zsh = \"ask\"" <<< "$OUT"'
+check "an unchanged table is not written"          '! grep -q "modules.starship" <<< "$OUT"'
+write '# my notes' '[bootstrap]' 'install_zsh = "ask"' '' '# fzf is off on this laptop' '[modules.fzf]' 'enabled = false' '' '# keep this' '[git]' 'editor = "vi"'
+cp "$DEF" "$LIVE"
+OUT="$(settings_omnishell_changes "$LIVE" "$DEF" "$F")"
+check "reverting a table to the default drops it"  '[ "$OUT" = "drop modules.fzf" ]'
+OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
+check "the override table is removed"              '! grep -q "modules.fzf" <<< "$OUT" && ! grep -q "enabled = false" <<< "$OUT"'
+check "comments and the next table survive"        'grep -qx "# keep this" <<< "$OUT" && grep -qx "\[git\]" <<< "$OUT" && grep -qx "# my notes" <<< "$OUT"'
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.starship]' 'enabled = false' '' '[modules.fzf]' 'enabled = false' > "$LIVE"
+write '[modules.fzf]' 'enabled = false' '' '[git]' 'editor = "vi"'
+OUT="$(settings_omnishell_changes "$LIVE" "$DEF" "$F")"
+check "a table equal to the override is skipped"   '! grep -q "modules.fzf" <<< "$OUT" && grep -qx "set modules.starship" <<< "$OUT"'
+OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
+printf '%s\n' "$OUT" > "$WORK/merged.toml"
+check "a replaced table keeps its place"           '[ "$(grep -n "^\[" <<< "$OUT" | cut -d: -f2 | tr "\n" " ")" = "[modules.fzf] [git] [modules.starship] " ]'
+write '[git]' 'editor = "vi"'
+check "no changes print the file as it is"         '[ "$(settings_update_omnishell "$F" "$DEF" "$DEF")" = "$(cat "$F")" ]'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
