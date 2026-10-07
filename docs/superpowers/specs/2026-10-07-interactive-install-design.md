@@ -44,16 +44,16 @@ gives the same result as a run without `--interactive`.
    change what the next steps do): for every key of the `bootstrap`,
    `ghostty`, `tmux` and `git` tables in `SETTINGS_SCHEMA`, in schema order:
    - the prompt shows table.key, the type or the allowed values, and the current
-     value in brackets: the settings file value, else the environment/flag value that
-     applies, else the effective default (`install_zsh` shows `no`, an unset `git`
-     key shows `unset`).
+     value of the settings file in brackets (`unset` when the file does not set the
+     key; the tracked default or the environment then applies as before).
    - Enter keeps the current value. A value is validated with `_settings_value_ok`
      (the same rule as when the file is read) and asked again on error. A single `-`
      clears the key (removes it from the file).
    - The result is a list of `table.key<US>kind<US>value` changes against the file.
 3. **Write the file** (`settings_update_file`): the changes are applied to the file
    text, not to a parsed copy:
-   - an existing active `key = value` line is replaced in place, keeping its comment;
+   - an existing active `key = value` line is replaced in place (comment lines stay; a
+     trailing comment on that same line is dropped);
    - a new key goes right below its `[table]` header, which is appended when the table
      does not exist;
    - a cleared key loses its active line, commented template lines stay;
