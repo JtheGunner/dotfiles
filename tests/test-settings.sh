@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # lib/settings.sh: parser, schema validation, getters, omnishell merge, Ghostty
 # rendering and the bootstrap.conf migration.
+# shellcheck disable=SC2034  # OUT is read inside the eval'd check expressions
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

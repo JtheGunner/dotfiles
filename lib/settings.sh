@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # globals are read by the functions below and by bootstrap.sh
 # Settings file support for bootstrap.sh: a restricted TOML subset parsed with awk
 # (no associative arrays, no gawk extensions - macOS ships bash 3.2 and BWK awk).
 # Sourced, never executed; defining the functions has no side effects.
