@@ -321,7 +321,7 @@ adding or removing files in a package, run `make restow`.
 | 🌿 | `git/`     | `~/.config/git/{config,ignore}`        | aliases (`st`, `co`, `lg`, `coi` = fzf branch switch), `main` default branch, global ignore; **no identity** (see [Git identity](#-git-identity)) |
 | 🪟 | `tmux/`    | `~/.tmux.conf`                         | prefix `C-a`, 1-based index, `\|` / `-` splits, mouse on, vi mode, Root-Loops-flavoured status bar (`prefix r` reloads)                           |
 | 🦇 | `bat/`     | `~/.config/bat/config`                 | `--theme="ansi"` so `bat` / `delta` / fzf previews inherit the terminal palette                                                                   |
-| 👻 | `ghostty/` | `~/.config/ghostty/config` + `themes/` | primary terminal; `theme = light:rootloops-light,dark:rootloops-dark` follows the OS                                                              |
+| 👻 | `ghostty/` | `~/.config/ghostty/config` + `themes/` | primary terminal; `theme = light:rootloops-light,dark:rootloops-dark` follows the OS; platform keybinds (see below)                               |
 | 📝 | `nvim/`    | `~/.config/nvim/`                      | opt-in: only stowed if the directory exists                                                                                                       |
 
 Stow a subset with `cd ~/.dotfiles && stow git tmux`; add an extra terminal
@@ -330,6 +330,18 @@ package via `DOTFILES_TERMINALS="alacritty kitty" ./bootstrap.sh` or `TERMINALS`
 
 Per-machine Ghostty overrides go in `~/.config/ghostty.local` (optional, outside
 the stowed directory).
+
+**Ghostty keybinds are platform-specific.** `bootstrap.sh` links
+`~/.config/ghostty-keybinds.conf` to the file for the current system:
+
+| System | File                                    | Scheme                                                                              |
+|--------|-----------------------------------------|-------------------------------------------------------------------------------------|
+| macOS  | `ghostty/.config/ghostty/keybinds-mac.conf`   | `super` (Cmd), Windows-style via Karabiner; Ghostty's defaults are cleared |
+| other  | `ghostty/.config/ghostty/keybinds-linux.conf` | `ctrl+shift+X`; `ctrl+shift+alt+X` for the shifted variants; `f11` fullscreen |
+
+Plain `ctrl+<letter>` stays with the shell (SIGINT, EOF, readline, fzf). Force a
+scheme with `DOTFILES_GHOSTTY_KEYBINDS=mac|linux ./bootstrap.sh`. Both files bind
+the same actions; `make test` fails when they drift apart.
 
 ### 5. Machine-specific & secrets: `~/.zshrc.local` / `~/.bashrc.local`
 
