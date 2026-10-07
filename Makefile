@@ -29,7 +29,7 @@ colors:
 
 # Scripts executed with bash, and POSIX fragments sourced by both shells.
 # (zsh files can only be syntax-checked - shellcheck does not support zsh.)
-BASH_SCRIPTS := bootstrap.sh rootloops/apply.sh rootloops/gen-vte-terminal.sh bash/bashrc.bash $(wildcard bash/bashrc-*.bash) $(wildcard tests/*.sh)
+BASH_SCRIPTS := bootstrap.sh lib/settings.sh rootloops/apply.sh rootloops/gen-vte-terminal.sh bash/bashrc.bash $(wildcard bash/bashrc-*.bash) $(wildcard tests/*.sh)
 SH_FRAGMENTS := $(wildcard shell.d/*.sh) zsh/.zprofile
 ZSH_FILES    := zsh/zshrc.zsh $(wildcard zsh/zshrc-*.zsh)
 
