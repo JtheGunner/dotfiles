@@ -2,7 +2,7 @@
 # Bootstrap this dotfiles repo on a fresh machine.
 #
 #   git clone https://github.com/JtheGunner/dotfiles ~/.dotfiles
-#   ~/.dotfiles/bootstrap.sh [--yes]
+#   ~/.dotfiles/bootstrap.sh [--yes] [--install-zsh | --no-install-zsh]
 #
 # Run it from whichever checkout you want to be live - it installs from there.
 # Before changing anything it checks every reference to a checkout (the DOTFILES=
@@ -25,6 +25,9 @@
 # and step 5 append to them, and a symlink would write those edits back into the
 # repo. The pristine rc content lives in zsh/zshrc.zsh + bash/bashrc.bash.
 #
+# zsh is installed only on an explicit "yes" (--install-zsh, DOTFILES_INSTALL_ZSH=yes
+# or INSTALL_ZSH=yes in ~/.config/dotfiles/bootstrap.conf) - never by --yes alone.
+#
 # It never runs `chsh`: whatever your current login shell is (bash or zsh) is
 # what gets configured.
 set -euo pipefail
@@ -32,15 +35,73 @@ set -euo pipefail
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OS="$(uname -s)"
 
-# --yes / -y (or DOTFILES_ASSUME_YES=1): don't prompt - e.g. switch rc files and
-# stow links from another checkout to this one without asking.
-ASSUME_YES="${DOTFILES_ASSUME_YES:-${ASSUME_YES:-0}}"
+log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m warn:\033[0m %s\n' "$*" >&2; }
+
+# Settings file (untracked, per machine): KEY=value lines, seeded from
+# bootstrap.conf.example. Precedence everywhere: flag > environment > this file.
+# Parsed, never sourced; only the keys below, each with a validated value.
+BOOTSTRAP_CONFIG="${DOTFILES_CONFIG:-$HOME/.config/dotfiles/bootstrap.conf}"
+BOOTSTRAP_CONFIG_KEYS=(INSTALL_ZSH ASSUME_YES TERMINALS)
+
+_valid_config_value() {
+  case "$1" in
+    INSTALL_ZSH) case "$2" in yes | no | ask) return 0 ;; esac; return 1 ;;
+    ASSUME_YES) case "$2" in yes | no) return 0 ;; esac; return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# sets CONF_<KEY> (empty when unset) for every key in BOOTSTRAP_CONFIG_KEYS
+load_bootstrap_config() {
+  local line key value known
+  for key in "${BOOTSTRAP_CONFIG_KEYS[@]}"; do printf -v "CONF_$key" '%s' ""; done
+  [ -r "$BOOTSTRAP_CONFIG" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%%#*}"
+    case "$line" in *=*) ;; *) continue ;; esac
+    key="${line%%=*}"; value="${line#*=}"
+    key="${key//[[:space:]]/}"
+    value="${value#"${value%%[![:space:]]*}"}"; value="${value%"${value##*[![:space:]]}"}"
+    known=0
+    for k in "${BOOTSTRAP_CONFIG_KEYS[@]}"; do [ "$k" = "$key" ] && known=1; done
+    if [ "$known" = 0 ]; then
+      warn "$BOOTSTRAP_CONFIG: unknown key '$key' - ignored"
+    elif _valid_config_value "$key" "$value"; then
+      printf -v "CONF_$key" '%s' "$value"
+    else
+      warn "$BOOTSTRAP_CONFIG: invalid $key value '$value' - ignored"
+    fi
+  done < "$BOOTSTRAP_CONFIG"
+}
+load_bootstrap_config
+
+# --yes / -y (or DOTFILES_ASSUME_YES=1, or ASSUME_YES=yes in the settings file):
+# don't prompt - e.g. switch rc files and stow links from another checkout to this
+# one without asking.
+if [ -n "${DOTFILES_ASSUME_YES:-${ASSUME_YES:-}}" ]; then
+  ASSUME_YES="${DOTFILES_ASSUME_YES:-$ASSUME_YES}"
+elif [ "$CONF_ASSUME_YES" = yes ]; then
+  ASSUME_YES=1
+else
+  ASSUME_YES=0
+fi
+# --install-zsh / --no-install-zsh: explicit zsh choice, beats env and config file.
+INSTALL_ZSH_FLAG=""
 if [ -z "${BOOTSTRAP_SOURCE_ONLY:-}" ]; then
   for _arg in "$@"; do
     case "$_arg" in
       -y | --yes) ASSUME_YES=1 ;;
+      --install-zsh) INSTALL_ZSH_FLAG=yes ;;
+      --no-install-zsh) INSTALL_ZSH_FLAG=no ;;
       -h | --help)
-        printf 'usage: %s [--yes]\n  --yes  assume "yes" for all prompts (switch rc files + stow links from another checkout to this one)\n' "$(basename "$0")"
+        cat <<USAGE
+usage: $(basename "$0") [--yes] [--install-zsh | --no-install-zsh]
+  --yes             assume "yes" for all prompts (switch rc files + stow links from another checkout to this one);
+                    does NOT install zsh
+  --install-zsh     install zsh if it is missing, without asking
+  --no-install-zsh  never install zsh
+USAGE
         exit 0 ;;
       *) printf 'bootstrap.sh: unknown argument: %s\n' "$_arg" >&2; exit 2 ;;
     esac
@@ -58,9 +119,10 @@ else SUDO=""; fi
 export PATH="$HOME/.local/bin:$PATH"
 
 # stow packages = top-level dirs that ship standalone config FILES (not rc files).
-# Ghostty is the terminal of choice; extra terminal packages via DOTFILES_TERMINALS.
+# Ghostty is the terminal of choice; extra terminal packages via DOTFILES_TERMINALS
+# or TERMINALS in the settings file.
 PACKAGES=(zsh git tmux bat ghostty)
-for t in ${DOTFILES_TERMINALS:-}; do
+for t in ${DOTFILES_TERMINALS:-$CONF_TERMINALS}; do
   case " ${PACKAGES[*]} " in *" $t "*) ;; *) [ -d "$DOTFILES/$t" ] && PACKAGES+=("$t") ;; esac
 done
 [ -d "$DOTFILES/nvim" ] && PACKAGES+=(nvim)
@@ -84,8 +146,6 @@ APT_BUILD_DEPS=(build-essential cmake pkg-config libssl-dev)
 # output of the last `omnishell apply`, for the degraded-module summary at the end
 APPLY_REPORT=""
 
-log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33m warn:\033[0m %s\n' "$*" >&2; }
 
 # true when dotted version $1 >= $2: numeric per field, missing fields count as 0,
 # a trailing suffix such as "-rc1" is ignored
@@ -109,6 +169,17 @@ backup_aside() {
   [ -e "$dst" ] && dst="$1.pre-dotfiles.$(date +%Y%m%dT%H%M%S)"
   warn "backing up $src -> $dst"
   mv "$src" "$dst"
+}
+
+# --------------------------------------------------------------------------
+# 0b. seed the settings file with every available option (commented out), so
+#     the options are discoverable on the machine. Never overwrites it.
+# --------------------------------------------------------------------------
+seed_bootstrap_config() {
+  [ -e "$BOOTSTRAP_CONFIG" ] && return 0
+  mkdir -p "$(dirname "$BOOTSTRAP_CONFIG")"
+  cp "$DOTFILES/bootstrap.conf.example" "$BOOTSTRAP_CONFIG"
+  log "wrote $BOOTSTRAP_CONFIG (all settings commented out)"
 }
 
 # --------------------------------------------------------------------------
@@ -153,6 +224,51 @@ install_deps() {
     warn "Install it (e.g. 'apt-get install stow' / 'brew install stow') and re-run."
     exit 1
   }
+}
+
+# --------------------------------------------------------------------------
+# 1a. optional zsh install. Mode (yes | no | ask), highest precedence first:
+#     --install-zsh / --no-install-zsh, DOTFILES_INSTALL_ZSH, INSTALL_ZSH in
+#     the untracked settings file (see BOOTSTRAP_CONFIG), default ask. --yes
+#     never counts as a "yes" for zsh.
+# --------------------------------------------------------------------------
+_install_zsh_mode() {
+  local mode="$INSTALL_ZSH_FLAG"
+  if [ -z "$mode" ] && [ -n "${DOTFILES_INSTALL_ZSH:-}" ]; then
+    if _valid_config_value INSTALL_ZSH "$DOTFILES_INSTALL_ZSH"; then mode="$DOTFILES_INSTALL_ZSH"
+    else warn "invalid DOTFILES_INSTALL_ZSH value '$DOTFILES_INSTALL_ZSH' (use yes, no or ask) - ignored"; fi
+  fi
+  printf '%s' "${mode:-${CONF_INSTALL_ZSH:-ask}}"
+}
+
+_install_zsh_package() {
+  if command -v brew >/dev/null 2>&1; then
+    brew install zsh
+  elif command -v apt-get >/dev/null 2>&1; then
+    $SUDO apt-get install -y -qq zsh
+  else
+    return 1
+  fi
+}
+
+_zsh_hint() {
+  warn "zsh is not installed ($1) - ~/.zshrc is written but unused until you install it"
+  warn "  e.g. 'sudo apt-get install zsh' / 'brew install zsh', or re-run with --install-zsh"
+}
+
+ensure_zsh() {
+  command -v zsh >/dev/null 2>&1 && return 0
+  case "$(_install_zsh_mode)" in
+    no) _zsh_hint "INSTALL_ZSH=no"; return 0 ;;
+    ask)
+      # --yes is not a "yes" for zsh: only an explicit setting installs it
+      if [ "${ASSUME_YES:-0}" = "1" ] || ! _confirm "zsh is not installed - install it now?"; then
+        _zsh_hint "not requested"
+        return 0
+      fi ;;
+  esac
+  log "installing zsh"
+  _install_zsh_package || warn "zsh could not be installed - install it manually"
 }
 
 # --------------------------------------------------------------------------
@@ -708,7 +824,9 @@ setup_terminal_app() {
 
 main() {
   check_checkout_consistency
+  seed_bootstrap_config
   install_deps
+  ensure_zsh
   install_ghostty
   install_omnishell
   write_rc_base
