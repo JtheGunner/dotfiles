@@ -140,6 +140,7 @@ _settings_type() { printf '%s\n' "$SETTINGS_SCHEMA" | awk -v k="$1" '$1 == k { p
 _settings_value_ok() {
   case "$1" in
     enum:*) [ "$2" = str ] || return 1
+            case "$3" in "" | *,*) return 1 ;; esac
             case ",${1#enum:}," in *",$3,"*) return 0 ;; esac
             return 1 ;;
     bool) [ "$2" = bool ] ;;
@@ -163,6 +164,100 @@ _settings_value_ok() {
            return 1 ;;
     *) return 1 ;;
   esac
+}
+
+# _settings_literal TYPE ANSWER: the TOML literal for a prompt answer, printed to
+# stdout; returns 1 (printing nothing) when the answer is empty, has a control
+# character, or is not valid for TYPE by the rules used when the file is read.
+_settings_literal() {
+  local type="$1" ans="$2" kind value="" item out="" sep="" int_re='^-?[0-9]+$' float_re='^-?[0-9]+\.[0-9]+$'
+  [ -n "$ans" ] || return 1
+  case "$ans" in *[[:cntrl:]]*) return 1 ;; esac
+  case "$type" in
+    bool)
+      case "$ans" in
+        true | yes | y) kind=bool; value=true ;;
+        false | no | n) kind=bool; value=false ;;
+        *) return 1 ;;
+      esac ;;
+    list)
+      kind=array
+      set -f
+      for item in ${ans//,/ }; do
+        case "$item" in *[\"\\]*) set +f; return 1 ;; esac
+        value="${value}${value:+$SETTINGS_RS}s$item"
+        out="${out}${sep}\"$item\""; sep=", "
+      done
+      set +f
+      [ -n "$value" ] || return 1 ;;
+    number | positive | fraction | nonneg | posint)
+      if [[ "$ans" =~ $int_re ]]; then kind=int
+      elif [[ "$ans" =~ $float_re ]]; then kind=float
+      else return 1; fi
+      value="$ans" ;;
+    *) kind=str; value="$ans" ;;
+  esac
+  _settings_value_ok "$type" "$kind" "$value" || return 1
+  case "$kind" in
+    str) printf '"%s"\n' "$(printf '%s' "$value" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" ;;
+    array) printf '[%s]\n' "$out" ;;
+    *) printf '%s\n' "$value" ;;
+  esac
+}
+
+# settings_update_file FILE CHANGES: FILE's text with the key changes applied, on
+# stdout. CHANGES is newline-separated table<US>key<US>literal, the literal being
+# TOML text ready to write; an empty literal clears the key. An active key line is
+# replaced in place (repeats collapse into the first), a missing key goes right
+# below its [table] header, a missing table is appended, a cleared key loses its
+# active line. Every other line - comments, commented template lines, tables and
+# keys the schema does not know - is copied as it is.
+settings_update_file() {
+  CHG="$2" awk -v us="$SETTINGS_US" '
+    function trim(s) { sub(/^[ \t\r]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
+    function header(line) { return line ~ /^[ \t]*\[[^\[].*\]/ }
+    function tname(line,   n) { n = line; sub(/^[ \t]*\[/, "", n); sub(/\].*$/, "", n); return trim(n) }
+    function keyof(line,   k) {
+      if (line !~ /^[ \t]*[A-Za-z0-9_-]+[ \t]*=/) return ""
+      k = line; sub(/^[ \t]*/, "", k); sub(/[ \t]*=.*$/, "", k); return k
+    }
+    BEGIN {
+      n = split(ENVIRON["CHG"], rows, "\n"); nc = 0
+      for (i = 1; i <= n; i++) {
+        if (rows[i] == "") continue
+        split(rows[i], f, us)
+        nc++; ct[nc] = f[1]; ck[nc] = f[2]; cl[nc] = f[3]
+        want[f[1], f[2]] = nc
+      }
+    }
+    FNR == NR {
+      if (header($0)) { t = tname($0); known[t] = 1 }
+      else if ((k = keyof($0)) != "") active[t, k] = 1
+      next
+    }
+    FNR == 1 { t = "" }
+    header($0) {
+      t = tname($0); print
+      for (i = 1; i <= nc; i++)
+        if (ct[i] == t && cl[i] != "" && !((t, ck[i]) in active) && !(i in done)) {
+          print ck[i] " = " cl[i]; done[i] = 1
+        }
+      next
+    }
+    (k = keyof($0)) != "" && ((t, k) in want) {
+      i = want[t, k]
+      if (!(i in done)) { if (cl[i] != "") print k " = " cl[i]; done[i] = 1 }
+      next
+    }
+    { print }
+    END {
+      for (i = 1; i <= nc; i++) {
+        if (cl[i] == "" || (ct[i] in known) || (ct[i] in tdone)) continue
+        print ""; print "[" ct[i] "]"; tdone[ct[i]] = 1
+        for (j = i; j <= nc; j++) if (ct[j] == ct[i] && cl[j] != "") print ck[j] " = " cl[j]
+      }
+    }
+  ' "$1" "$1"
 }
 
 # settings_load FILE: parse and validate into SETTINGS_RECORDS. [bootstrap] and
@@ -285,6 +380,93 @@ settings_merge_omnishell() {
       for (i = 1; i <= no; i++) if (!(oorder[i] in used)) printf "\n%s", otext[oorder[i]]
     }
   ' "$1"
+}
+
+# sorted records of one table of FILE
+_settings_table_records() {
+  settings_parse "$1" 2>/dev/null | awk -F"$SETTINGS_US" -v t="$2" '$1 == t' | sort
+}
+
+# tables of FILE that have a line settings_parse rejects (one name per line)
+_settings_tables_with_rejects() {
+  local lines
+  lines="$(settings_parse "$1" 2>&1 >/dev/null | sed -n 's/^[^:]*:\([0-9][0-9]*\):.*/\1/p')"
+  [ -n "$lines" ] || return 0
+  awk -v lines="$lines" '
+    BEGIN { n = split(lines, a, "\n"); for (i = 1; i <= n; i++) bad[a[i]] = 1 }
+    /^[ \t]*\[[^\[].*\]/ { t = $0; sub(/^[ \t]*\[/, "", t); sub(/\].*$/, "", t); gsub(/^[ \t]+|[ \t]+$/, "", t) }
+    (FNR in bad) && t != "" && !(t in out) { out[t] = 1; print t }
+  ' "$1"
+}
+
+# settings_omnishell_changes LIVE DEFAULT FILE: "set NAME" or "drop NAME" for every
+# omnishell / modules.* table of LIVE that differs from what FILE says today (its
+# own table of that name, else the one in DEFAULT). A table equal to DEFAULT's is
+# dropped from FILE, any other one is set whole.
+settings_omnishell_changes() {
+  local live="$1" default="$2" file="$3" t now cur def skipped off
+  skipped="$(_settings_tables_with_rejects "$live")"
+  for t in $skipped; do
+    warn "$live: [$t] holds a value this settings format cannot hold - the table is left out of $file"
+  done
+  while IFS= read -r t; do
+    if [ -n "$skipped" ] && grep -qxF "$t" <<< "$skipped"; then continue; fi
+    now="$(_settings_table_records "$live" "$t")"
+    cur="$(_settings_table_records "$file" "$t")"
+    def="$(_settings_table_records "$default" "$t")"
+    [ -n "$cur" ] || cur="$def"
+    [ "$now" = "$cur" ] && continue
+    # a module the default does not list, switched off again, is "the default"
+    off="${t}${SETTINGS_US}enabled${SETTINGS_US}bool${SETTINGS_US}false"
+    if [ "$now" = "$def" ] || { [ -z "$def" ] && [ "$now" = "$off" ]; }; then echo "drop $t"; else echo "set $t"; fi
+  done < <(settings_parse "$live" 2>/dev/null |
+    awk -F"$SETTINGS_US" '($1 == "omnishell" || $1 ~ /^modules\./) && !($1 in seen) { seen[$1] = 1; print $1 }')
+}
+
+# settings_update_omnishell FILE LIVE DEFAULT: FILE's text with the omnishell
+# tables of LIVE taken over (see settings_omnishell_changes), on stdout. A "set"
+# table replaces the table of that name as a whole, or is appended; a "drop" table
+# is removed. Blank and comment lines right above the next table stay where they are.
+settings_update_omnishell() {
+  local file="$1" live="$2" default="$3" changes sets drops saved blocks
+  changes="$(settings_omnishell_changes "$live" "$default" "$file")"
+  if [ -z "$changes" ]; then cat "$file"; return 0; fi
+  sets="$(printf '%s\n' "$changes" | awk '$1 == "set" { printf "%s ", $2 }')"
+  drops="$(printf '%s\n' "$changes" | awk '$1 == "drop" { printf "%s ", $2 }')"
+  saved="$SETTINGS_RECORDS"
+  SETTINGS_RECORDS="$(settings_parse "$live" 2>/dev/null |
+    awk -F"$SETTINGS_US" -v sel="$sets" 'BEGIN { n = split(sel, a, " "); for (i = 1; i <= n; i++) w[a[i]] = 1 } ($1 in w)')"$'\n'
+  blocks="$(_settings_omnishell_blocks)"
+  SETTINGS_RECORDS="$saved"
+  OVR="$blocks" DROP="$drops" awk '
+    function blank_or_comment(s) { return s ~ /^[ \t]*(#.*)?$/ }
+    function header(line) { return line ~ /^[ \t]*\[[^\[].*\]/ }
+    function tname(line,   n) { n = line; sub(/^[ \t]*\[/, "", n); sub(/\].*$/, "", n); gsub(/^[ \t]+|[ \t]+$/, "", n); return n }
+    BEGIN {
+      n = split(ENVIRON["OVR"], ol, "\n"); cur = ""
+      for (i = 1; i <= n; i++) {
+        if (ol[i] ~ /^\[/) { cur = substr(ol[i], 2, length(ol[i]) - 2); oorder[++no] = cur; otext[cur] = ol[i] "\n" }
+        else if (ol[i] != "") otext[cur] = otext[cur] ol[i] "\n"
+      }
+      m = split(ENVIRON["DROP"], dl, " ")
+      for (i = 1; i <= m; i++) if (dl[i] != "") drop[dl[i]] = 1
+      skipping = 0; pend = ""
+    }
+    header($0) {
+      printf "%s", pend; pend = ""; skipping = 0
+      name = tname($0)
+      if (name in used) { skipping = 1; next }
+      if (name in otext) { printf "%s", otext[name]; used[name] = 1; skipping = 1; next }
+      if (name in drop) { skipping = 1; next }
+      print; next
+    }
+    skipping { if (blank_or_comment($0)) pend = pend $0 "\n"; else pend = ""; next }
+    { print }
+    END {
+      printf "%s", pend
+      for (i = 1; i <= no; i++) if (!(oorder[i] in used)) printf "\n%s", otext[oorder[i]]
+    }
+  ' "$file"
 }
 
 # Ghostty `key = value` lines for the [ghostty] values that are set. `keybinds`

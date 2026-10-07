@@ -336,6 +336,106 @@ write '[bootstrap]' 'install_zsh = "ask"'
 settings_load "$F" 2>/dev/null
 check "no git keys render nothing"                                    '[ -z "$(settings_render_git)" ]'
 
+echo ">> _settings_literal"
+lit() { _settings_literal "$@" 2>/dev/null; }
+check "enum answer becomes a quoted string"       '[ "$(lit enum:yes,no,ask yes)" = "\"yes\"" ]'
+check "enum rejects a value outside the list"     '! lit enum:yes,no,ask maybe >/dev/null'
+check "bool accepts yes and prints true"          '[ "$(lit bool yes)" = true ]'
+check "bool accepts false"                        '[ "$(lit bool false)" = false ]'
+check "bool rejects maybe"                        '! lit bool maybe >/dev/null'
+check "list splits on spaces and commas"         '[ "$(lit list "a, b c")" = "[\"a\", \"b\", \"c\"]" ]'
+check "list rejects a quote"                      '! lit list "a\"b" >/dev/null'
+check "list rejects an empty list"                '! lit list " , " >/dev/null'
+check "positive number stays bare"                '[ "$(lit positive 13.5)" = 13.5 ]'
+check "positive rejects 0"                        '! lit positive 0 >/dev/null'
+check "fraction rejects 1.5"                      '! lit fraction 1.5 >/dev/null'
+check "nonneg rejects a float"                    '! lit nonneg 1.5 >/dev/null'
+check "posint rejects text"                       '! lit posint abc >/dev/null'
+check "string escapes a quote and a backslash"    '[ "$(lit string "a\"b\\c")" = "\"a\\\"b\\\\c\"" ]'
+check "tmuxkey accepts C-a"                       '[ "$(lit tmuxkey C-a)" = "\"C-a\"" ]'
+check "tmuxkey rejects ctrl-a"                    '! lit tmuxkey ctrl-a >/dev/null'
+check "email rejects a missing at-sign"           '! lit email nobody >/dev/null'
+check "an empty answer is rejected"               '! lit string "" >/dev/null'
+check "a control character is rejected"           '! lit string "$(printf "a\tb")" >/dev/null'
+
+echo ">> settings_update_file"
+chg() { printf '%s\037%s\037%s\n' "$@"; }
+write '# top comment' '[tmux]' '# mouse is off here' 'mouse = false # was off' 'prefix = "C-a"' '' '[git]' 'user_name = "A"' '#editor = "vi"'
+OUT="$(settings_update_file "$F" "$(chg tmux mouse true)")"
+check "an active key is replaced in place"        'grep -qx "mouse = true" <<< "$OUT" && ! grep -q "mouse = false" <<< "$OUT"'
+check "the comment lines and other keys stay"     'grep -qx "# top comment" <<< "$OUT" && grep -qx "# mouse is off here" <<< "$OUT" && grep -qx "prefix = \"C-a\"" <<< "$OUT"'
+check "the key keeps its line"                    '[ "$(sed -n 4p <<< "$OUT")" = "mouse = true" ]'
+OUT="$(settings_update_file "$F" "$(chg tmux mode_keys '"vi"')")"
+check "a new key goes right below its header"     '[ "$(sed -n 3p <<< "$OUT")" = "mode_keys = \"vi\"" ]'
+OUT="$(settings_update_file "$F" "$(chg git editor '"nvim"')")"
+check "a commented template line is not touched"  'grep -qx "#editor = \"vi\"" <<< "$OUT" && grep -qx "editor = \"nvim\"" <<< "$OUT"'
+OUT="$(settings_update_file "$F" "$(chg ghostty font_size 14)")"
+check "a new table is appended after a blank line" '[ "$(tail -3 <<< "$OUT" | head -1)" = "" ] && [ "$(tail -2 <<< "$OUT" | head -1)" = "[ghostty]" ] && [ "$(tail -1 <<< "$OUT")" = "font_size = 14" ]'
+OUT="$(settings_update_file "$F" "$(chg tmux prefix '')")"
+check "an empty literal clears the key"           '! grep -q "^prefix" <<< "$OUT" && grep -qx "mouse = false # was off" <<< "$OUT"'
+OUT="$(settings_update_file "$F" "$(chg tmux prefix '' ; chg tmux mouse true; chg git user_name '"B"')")"
+check "several changes in one pass"               'grep -qx "mouse = true" <<< "$OUT" && grep -qx "user_name = \"B\"" <<< "$OUT" && ! grep -q "^prefix" <<< "$OUT"'
+OUT="$(settings_update_file "$F" "")"
+check "no changes print the file as it is"        '[ "$OUT" = "$(cat "$F")" ]'
+write '[tmux]' 'mouse = false' 'mouse = true' 'prefix = "C-b"'
+OUT="$(settings_update_file "$F" "$(chg tmux mouse false)")"
+check "a repeated key collapses to one line"      '[ "$(grep -c "^mouse" <<< "$OUT")" = 1 ]'
+write '[bootstrap]' 'install_zsh = "ask"' '[modules.fzf]' 'enabled = true'
+OUT="$(settings_update_file "$F" "$(chg bootstrap terminals '["foot"]')")"
+check "an unknown table stays untouched"          'grep -qx "\[modules.fzf\]" <<< "$OUT" && grep -qx "enabled = true" <<< "$OUT"'
+printf '%s\n' "$OUT" > "$WORK/updated.toml"
+settings_load "$WORK/updated.toml" 2>/dev/null
+check "the updated file loads back"               '[ "$(settings_get bootstrap.terminals)" = foot ] && [ "$(settings_get bootstrap.install_zsh)" = ask ]'
+
+echo ">> omnishell tables: changes and update"
+DEF="$WORK/default.toml"; LIVE="$WORK/live.toml"
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.starship]' 'enabled = true' '' '[modules.fzf]' 'enabled = true' > "$DEF"
+write '[bootstrap]' 'install_zsh = "ask"'
+cp "$DEF" "$LIVE"
+check "an untouched live config has no changes"    '[ -z "$(settings_omnishell_changes "$LIVE" "$DEF" "$F")" ]'
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.starship]' 'enabled = true' '' '[modules.fzf]' 'enabled = false' '' '[modules.broot]' 'enabled = true' > "$LIVE"
+OUT="$(settings_omnishell_changes "$LIVE" "$DEF" "$F")"
+check "a changed and a new table are set"          'grep -qx "set modules.fzf" <<< "$OUT" && grep -qx "set modules.broot" <<< "$OUT" && [ "$(grep -c . <<< "$OUT")" = 2 ]'
+OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
+check "the changed table is appended whole"        'grep -qx "\[modules.fzf\]" <<< "$OUT" && grep -qx "enabled = false" <<< "$OUT" && grep -qx "\[modules.broot\]" <<< "$OUT"'
+check "the other tables of the file stay"          'grep -qx "\[bootstrap\]" <<< "$OUT" && grep -qx "install_zsh = \"ask\"" <<< "$OUT"'
+check "an unchanged table is not written"          '! grep -q "modules.starship" <<< "$OUT"'
+write '# my notes' '[bootstrap]' 'install_zsh = "ask"' '' '# fzf is off on this laptop' '[modules.fzf]' 'enabled = false' '' '# keep this' '[git]' 'editor = "vi"'
+cp "$DEF" "$LIVE"
+OUT="$(settings_omnishell_changes "$LIVE" "$DEF" "$F")"
+check "reverting a table to the default drops it"  '[ "$OUT" = "drop modules.fzf" ]'
+OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
+check "the override table is removed"              '! grep -q "modules.fzf" <<< "$OUT" && ! grep -q "enabled = false" <<< "$OUT"'
+check "comments and the next table survive"        'grep -qx "# keep this" <<< "$OUT" && grep -qx "\[git\]" <<< "$OUT" && grep -qx "# my notes" <<< "$OUT"'
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.starship]' 'enabled = false' '' '[modules.fzf]' 'enabled = false' > "$LIVE"
+write '[modules.fzf]' 'enabled = false' '' '[git]' 'editor = "vi"'
+OUT="$(settings_omnishell_changes "$LIVE" "$DEF" "$F")"
+check "a table equal to the override is skipped"   '! grep -q "modules.fzf" <<< "$OUT" && grep -qx "set modules.starship" <<< "$OUT"'
+OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
+printf '%s\n' "$OUT" > "$WORK/merged.toml"
+check "a replaced table keeps its place"           '[ "$(grep -n "^\[" <<< "$OUT" | cut -d: -f2 | tr "\n" " ")" = "[modules.fzf] [git] [modules.starship] " ]'
+write '[git]' 'editor = "vi"'
+check "no changes print the file as it is"         '[ "$(settings_update_omnishell "$F" "$DEF" "$DEF")" = "$(cat "$F")" ]'
+
+echo ">> review fixes: enum commas, tables outside the subset, modules the default lacks"
+check "an enum value with a comma is rejected"        '! _settings_value_ok enum:yes,no,ask str "no,ask"'
+check "an empty enum value is rejected"               '! _settings_value_ok enum:yes,no,ask str ""'
+check "_settings_literal rejects a comma-joined enum" '! lit enum:vi,emacs "vi,emacs" >/dev/null'
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.fzf.options]' 'ctrl_r = true' 'default_opts = "a\tb"' > "$LIVE"
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.fzf.options]' 'ctrl_r = false' 'default_opts = "--height 40%"' > "$DEF"
+write '[git]' 'editor = "vi"'
+OUT="$(settings_omnishell_changes "$LIVE" "$DEF" "$F" 2>"$ERR")"
+check "a table with a line outside the subset is left out"  '[ -z "$OUT" ]'
+check "and the user is told which table"                    'grep -q "modules.fzf.options" "$ERR"'
+check "the file is printed as it is, not with a partial table" '[ "$(settings_update_omnishell "$F" "$LIVE" "$DEF" 2>/dev/null)" = "$(cat "$F")" ]'
+printf '%s\n' '[modules.eza]' 'enabled = false' > "$LIVE"
+printf '%s\n' '[omnishell]' 'x = 1' > "$DEF"
+write '[modules.eza]' 'enabled = true'
+check "turning off a module the default lacks drops its override" '[ "$(settings_omnishell_changes "$LIVE" "$DEF" "$F")" = "drop modules.eza" ]'
+printf '%s\n' '[modules.eza]' 'enabled = true' > "$LIVE"
+write '[git]' 'editor = "vi"'
+check "turning one on still sets it"                          '[ "$(settings_omnishell_changes "$LIVE" "$DEF" "$F")" = "set modules.eza" ]' 
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

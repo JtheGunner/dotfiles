@@ -12,6 +12,8 @@
 # commas in arrays, multi-line values, inline tables, dotted keys, single-quoted
 # strings and the escapes \n, \t and \u (only \" and \\ work).
 # Precedence: command-line flag > environment variable > this file > default.
+# ./bootstrap.sh --interactive asks for these settings and for the omnishell modules
+# and writes the answers here (comments stay, the old file is kept as config.toml.bak).
 
 # [bootstrap]
 #
