@@ -288,6 +288,54 @@ check "git.pull_rebase accepts a boolean"     '[ "$(val git pull_rebase true)" =
 check "git.default_branch accepts a string"   '[ "$(val git default_branch "\"trunk\"")" = trunk ]'
 check "git.editor accepts a string"           '[ "$(val git editor "\"nvim -f\"")" = "nvim -f" ]'
 
+echo ">> tmux and git rendering"
+write '[tmux]' 'prefix = "C-b"' 'mouse = false' 'mode_keys = "emacs"' 'base_index = 0' \
+  'escape_time = 10' 'history_limit = 20000' 'status_position = "top"'
+settings_load "$F" 2>/dev/null
+check "settings_render_tmux prints every command in order" '[ "$(settings_render_tmux)" = "unbind C-a
+set -g prefix C-b
+bind C-b send-prefix
+set -g mouse off
+set-window-option -g mode-keys emacs
+set -g base-index 0
+set -sg escape-time 10
+set -g history-limit 20000
+set -g status-position top" ]'
+write '[tmux]' 'mouse = true'
+settings_load "$F" 2>/dev/null
+check "a single key renders a single command"             '[ "$(settings_render_tmux)" = "set -g mouse on" ]'
+write '[bootstrap]' 'install_zsh = "ask"'
+settings_load "$F" 2>/dev/null
+check "no tmux keys render nothing"                       '[ -z "$(settings_render_tmux)" ]'
+
+if command -v tmux >/dev/null 2>&1; then
+  write '[tmux]' 'prefix = "C-a"' 'mouse = false' 'history_limit = 777'
+  settings_load "$F" 2>/dev/null
+  settings_render_tmux > "$WORK/tmux-settings.conf"
+  SOCK="dotfiles-test-$$"
+  tmux_show() {
+    tmux -L "$SOCK" -f /dev/null new-session -d 'sleep 30' \; source-file "$WORK/tmux-settings.conf" \; show-options -gv "$1" 2>/dev/null
+    tmux -L "$SOCK" kill-server 2>/dev/null || true
+  }
+  check "real tmux accepts the generated file and keeps prefix C-a" '[ "$(tmux_show prefix)" = C-a ]'
+  check "real tmux applies history-limit"                           '[ "$(tmux_show history-limit)" = 777 ]'
+  tmux -L "$SOCK" kill-server 2>/dev/null || true
+else
+  pass "tmux is not installed - syntax check skipped"
+fi
+
+write '[git]' 'user_name = "Ada \"A\" \\ #1"' 'user_email = "ada@example.com"' 'default_branch = "trunk"' \
+  'editor = "nvim -f"' 'pull_rebase = true' 'signing_key = "~/.ssh/id.pub"'
+settings_load "$F" 2>/dev/null
+check "settings_render_git prints key and value records, no signing" '[ "$(settings_render_git | tr "\037" "|")" = "user.name|Ada \"A\" \\ #1
+user.email|ada@example.com
+init.defaultBranch|trunk
+core.editor|nvim -f
+pull.rebase|true" ]'
+write '[bootstrap]' 'install_zsh = "ask"'
+settings_load "$F" 2>/dev/null
+check "no git keys render nothing"                                    '[ -z "$(settings_render_git)" ]'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

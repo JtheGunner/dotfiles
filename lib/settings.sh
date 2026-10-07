@@ -351,3 +351,45 @@ settings_migrate_legacy() {
   _settings_retire_legacy "$legacy"
   log "migrated $legacy to $new"
 }
+
+# tmux commands for the [tmux] values that are set, in a fixed order. A prefix
+# change unbinds the tracked default C-a first, so setting C-a itself still works.
+settings_render_tmux() {
+  local v
+  v="$(settings_get tmux.prefix)"
+  if [ -n "$v" ]; then
+    printf 'unbind C-a\nset -g prefix %s\nbind %s send-prefix\n' "$v" "$v"
+  fi
+  v="$(settings_get tmux.mouse)"
+  case "$v" in
+    true) printf 'set -g mouse on\n' ;;
+    false) printf 'set -g mouse off\n' ;;
+  esac
+  v="$(settings_get tmux.mode_keys)"
+  [ -z "$v" ] || printf 'set-window-option -g mode-keys %s\n' "$v"
+  v="$(settings_get tmux.base_index)"
+  [ -z "$v" ] || printf 'set -g base-index %s\n' "$v"
+  v="$(settings_get tmux.escape_time)"
+  [ -z "$v" ] || printf 'set -sg escape-time %s\n' "$v"
+  v="$(settings_get tmux.history_limit)"
+  [ -z "$v" ] || printf 'set -g history-limit %s\n' "$v"
+  v="$(settings_get tmux.status_position)"
+  [ -z "$v" ] || printf 'set -g status-position %s\n' "$v"
+}
+
+# git-config-key<US>value records for the [git] values that are set. signing_key
+# is left to the bootstrap: it needs the public key file to exist and sets four
+# keys (see write_git_signing_config).
+settings_render_git() {
+  local v
+  v="$(settings_get git.user_name)"
+  [ -z "$v" ] || printf 'user.name%s%s\n' "$SETTINGS_US" "$v"
+  v="$(settings_get git.user_email)"
+  [ -z "$v" ] || printf 'user.email%s%s\n' "$SETTINGS_US" "$v"
+  v="$(settings_get git.default_branch)"
+  [ -z "$v" ] || printf 'init.defaultBranch%s%s\n' "$SETTINGS_US" "$v"
+  v="$(settings_get git.editor)"
+  [ -z "$v" ] || printf 'core.editor%s%s\n' "$SETTINGS_US" "$v"
+  v="$(settings_get git.pull_rebase)"
+  [ -z "$v" ] || printf 'pull.rebase%s%s\n' "$SETTINGS_US" "$v"
+}
