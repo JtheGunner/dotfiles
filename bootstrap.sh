@@ -26,7 +26,7 @@
 # repo. The pristine rc content lives in zsh/zshrc.zsh + bash/bashrc.bash.
 #
 # zsh is installed only on an explicit "yes" (--install-zsh, DOTFILES_INSTALL_ZSH=yes
-# or INSTALL_ZSH=yes in ~/.config/dotfiles/bootstrap.conf) - never by --yes alone.
+# or install_zsh = "yes" in ~/.config/dotfiles/config.toml) - never by --yes alone.
 #
 # It never runs `chsh`: whatever your current login shell is (bash or zsh) is
 # what gets configured.
@@ -38,50 +38,25 @@ OS="$(uname -s)"
 log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m warn:\033[0m %s\n' "$*" >&2; }
 
-# Settings file (untracked, per machine): KEY=value lines, seeded from
-# bootstrap.conf.example. Precedence everywhere: flag > environment > this file.
-# Parsed, never sourced; only the keys below, each with a validated value.
-BOOTSTRAP_CONFIG="${DOTFILES_CONFIG:-$HOME/.config/dotfiles/bootstrap.conf}"
-BOOTSTRAP_CONFIG_KEYS=(INSTALL_ZSH ASSUME_YES TERMINALS)
+# Settings file (untracked, per machine, seeded from config.toml.example): a
+# restricted TOML subset parsed by lib/settings.sh, never sourced. Precedence
+# everywhere: flag > environment > settings file > default.
+# shellcheck source=lib/settings.sh
+. "$DOTFILES/lib/settings.sh"
+BOOTSTRAP_CONFIG="${DOTFILES_CONFIG:-$HOME/.config/dotfiles/config.toml}"
+settings_migrate_legacy "$(dirname "$BOOTSTRAP_CONFIG")/bootstrap.conf" "$BOOTSTRAP_CONFIG"
+settings_load "$BOOTSTRAP_CONFIG"
+CONF_INSTALL_ZSH="$(settings_get bootstrap.install_zsh)"
+CONF_ASSUME_YES="$(settings_get bootstrap.assume_yes)"
+CONF_TERMINALS="$(settings_get bootstrap.terminals)"
+CONF_GHOSTTY_KEYBINDS="$(settings_get ghostty.keybinds)"
 
-_valid_config_value() {
-  case "$1" in
-    INSTALL_ZSH) case "$2" in yes | no | ask) return 0 ;; esac; return 1 ;;
-    ASSUME_YES) case "$2" in yes | no) return 0 ;; esac; return 1 ;;
-    *) return 0 ;;
-  esac
-}
-
-# sets CONF_<KEY> (empty when unset) for every key in BOOTSTRAP_CONFIG_KEYS
-load_bootstrap_config() {
-  local line key value known
-  for key in "${BOOTSTRAP_CONFIG_KEYS[@]}"; do printf -v "CONF_$key" '%s' ""; done
-  [ -r "$BOOTSTRAP_CONFIG" ] || return 0
-  while IFS= read -r line || [ -n "$line" ]; do
-    line="${line%%#*}"
-    case "$line" in *=*) ;; *) continue ;; esac
-    key="${line%%=*}"; value="${line#*=}"
-    key="${key//[[:space:]]/}"
-    value="${value#"${value%%[![:space:]]*}"}"; value="${value%"${value##*[![:space:]]}"}"
-    known=0
-    for k in "${BOOTSTRAP_CONFIG_KEYS[@]}"; do [ "$k" = "$key" ] && known=1; done
-    if [ "$known" = 0 ]; then
-      warn "$BOOTSTRAP_CONFIG: unknown key '$key' - ignored"
-    elif _valid_config_value "$key" "$value"; then
-      printf -v "CONF_$key" '%s' "$value"
-    else
-      warn "$BOOTSTRAP_CONFIG: invalid $key value '$value' - ignored"
-    fi
-  done < "$BOOTSTRAP_CONFIG"
-}
-load_bootstrap_config
-
-# --yes / -y (or DOTFILES_ASSUME_YES=1, or ASSUME_YES=yes in the settings file):
+# --yes / -y (or DOTFILES_ASSUME_YES=1, or assume_yes = true in the settings file):
 # don't prompt - e.g. switch rc files and stow links from another checkout to this
 # one without asking.
 if [ -n "${DOTFILES_ASSUME_YES:-${ASSUME_YES:-}}" ]; then
   ASSUME_YES="${DOTFILES_ASSUME_YES:-$ASSUME_YES}"
-elif [ "$CONF_ASSUME_YES" = yes ]; then
+elif [ "$CONF_ASSUME_YES" = true ]; then
   ASSUME_YES=1
 else
   ASSUME_YES=0
@@ -178,7 +153,7 @@ backup_aside() {
 seed_bootstrap_config() {
   [ -e "$BOOTSTRAP_CONFIG" ] && return 0
   mkdir -p "$(dirname "$BOOTSTRAP_CONFIG")"
-  cp "$DOTFILES/bootstrap.conf.example" "$BOOTSTRAP_CONFIG"
+  cp "$DOTFILES/config.toml.example" "$BOOTSTRAP_CONFIG"
   log "wrote $BOOTSTRAP_CONFIG (all settings commented out)"
 }
 
@@ -235,8 +210,10 @@ install_deps() {
 _install_zsh_mode() {
   local mode="$INSTALL_ZSH_FLAG"
   if [ -z "$mode" ] && [ -n "${DOTFILES_INSTALL_ZSH:-}" ]; then
-    if _valid_config_value INSTALL_ZSH "$DOTFILES_INSTALL_ZSH"; then mode="$DOTFILES_INSTALL_ZSH"
-    else warn "invalid DOTFILES_INSTALL_ZSH value '$DOTFILES_INSTALL_ZSH' (use yes, no or ask) - ignored"; fi
+    case "$DOTFILES_INSTALL_ZSH" in
+      yes | no | ask) mode="$DOTFILES_INSTALL_ZSH" ;;
+      *) warn "invalid DOTFILES_INSTALL_ZSH value '$DOTFILES_INSTALL_ZSH' (use yes, no or ask) - ignored" ;;
+    esac
   fi
   printf '%s' "${mode:-${CONF_INSTALL_ZSH:-ask}}"
 }
@@ -631,7 +608,7 @@ stow_packages() {
 #     in the repo. DOTFILES_GHOSTTY_KEYBINDS=auto|mac|linux overrides the OS.
 # --------------------------------------------------------------------------
 setup_ghostty_keybinds() {
-  local scheme="${DOTFILES_GHOSTTY_KEYBINDS:-auto}" link="$HOME/.config/ghostty-keybinds.conf"
+  local scheme="${DOTFILES_GHOSTTY_KEYBINDS:-${CONF_GHOSTTY_KEYBINDS:-auto}}" link="$HOME/.config/ghostty-keybinds.conf"
   case "$scheme" in
     auto | mac | linux) ;;
     *) warn "invalid DOTFILES_GHOSTTY_KEYBINDS value '$scheme' (use auto, mac or linux) - using auto"
