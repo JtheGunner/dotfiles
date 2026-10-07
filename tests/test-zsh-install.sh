@@ -15,7 +15,7 @@ check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
 # A PATH with only what the functions under test need, so `zsh` is present
 # exactly when a test puts a fake one in $WORK/bin. apt-get is a recorder.
 mkdir -p "$WORK/bin"
-for tool in head rm cat mkdir basename dirname uname id tr; do
+for tool in head rm cat cp mkdir basename dirname uname id tr; do
   ln -s "$(command -v "$tool")" "$WORK/bin/$tool"
 done
 APT_LOG="$WORK/apt.log"
@@ -110,6 +110,51 @@ echo ">> install failure"
 reset; fake_apt 1; config 'INSTALL_ZSH=yes'
 check "exits 0" "run ''"
 check "warns" "grep -q 'zsh could not be installed' '$WORK/err'"
+
+echo ">> settings template and other keys"
+# evaluate an expression after sourcing bootstrap.sh against the test config
+probe() {
+  env -i PATH="$WORK/bin" HOME="$WORK/home" DOTFILES_CONFIG="$WORK/bootstrap.conf" \
+    BOOTSTRAP_SOURCE_ONLY=1 $1 "$BASH" -c ". '$DOTFILES/bootstrap.sh'; $2" 2>"$WORK/err"
+}
+keys="$(env -i PATH="$WORK/bin" HOME="$WORK/home" BOOTSTRAP_SOURCE_ONLY=1 \
+  "$BASH" -c ". '$DOTFILES/bootstrap.sh'; printf '%s ' \"\${BOOTSTRAP_CONFIG_KEYS[@]}\"" 2>/dev/null)"
+check "knows at least one key" "[ -n '$keys' ]"
+for key in $keys; do
+  check "bootstrap.conf.example documents $key" \
+    "grep -qE '^#?$key=' '$DOTFILES/bootstrap.conf.example'"
+done
+check "the template has every setting commented out" \
+  "! grep -qE '^[A-Z_]+=' '$DOTFILES/bootstrap.conf.example'"
+
+reset; cp "$DOTFILES/bootstrap.conf.example" "$WORK/bootstrap.conf"
+probe "" 'true'
+check "the template loads without warnings" "[ ! -s '$WORK/err' ]"
+
+reset; config 'ASSUME_YES=yes'
+check "ASSUME_YES=yes sets ASSUME_YES=1" "[ \"\$(probe '' 'printf %s \"\$ASSUME_YES\"')\" = 1 ]"
+check "env DOTFILES_ASSUME_YES=0 beats the config file" \
+  "[ \"\$(probe 'DOTFILES_ASSUME_YES=0' 'printf %s \"\$ASSUME_YES\"')\" = 0 ]"
+reset; config 'ASSUME_YES=maybe'
+probe "" 'true'
+check "invalid ASSUME_YES warns" "grep -q 'invalid ASSUME_YES' '$WORK/err'"
+check "invalid ASSUME_YES falls back to 0" "[ \"\$(probe '' 'printf %s \"\$ASSUME_YES\"')\" = 0 ]"
+
+reset; config 'TERMINALS=rootloops nonexistent'
+check "TERMINALS adds an existing package dir" \
+  "probe '' 'printf \"%s \" \"\${PACKAGES[@]}\"' | grep -qw rootloops"
+check "TERMINALS ignores a missing dir" \
+  "! probe '' 'printf \"%s \" \"\${PACKAGES[@]}\"' | grep -qw nonexistent"
+
+echo ">> seeding the settings file"
+reset; rm -rf "$WORK/seed"; SEED="$WORK/seed/dotfiles/bootstrap.conf"
+seed() { env -i PATH="$WORK/bin" HOME="$WORK/home" DOTFILES_CONFIG="$SEED" BOOTSTRAP_SOURCE_ONLY=1 \
+  "$BASH" -c ". '$DOTFILES/bootstrap.sh'; seed_bootstrap_config" >/dev/null 2>&1; }
+seed
+check "creates the file and its directory from the template" "cmp -s '$SEED' '$DOTFILES/bootstrap.conf.example'"
+printf 'INSTALL_ZSH=yes\n' > "$SEED"
+seed
+check "never overwrites an existing file" "[ \"\$(cat '$SEED')\" = 'INSTALL_ZSH=yes' ]"
 
 echo ">> command line"
 check "--help lists --install-zsh" \

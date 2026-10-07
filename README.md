@@ -133,27 +133,34 @@ stow git tmux bat # only the packages you want
 
 ## ⚙️ Bootstrap configuration
 
-zsh is installed only on an **explicit "yes"**. `--yes` alone never installs it.
-Without a setting, `bootstrap.sh` asks when zsh is missing and a terminal is
-available; otherwise it prints a hint and carries on (bash stays fully usable).
+Every bootstrap option can live in one untracked, per-machine file:
+`~/.config/dotfiles/bootstrap.conf`. The first run copies
+[`bootstrap.conf.example`](bootstrap.conf.example) there with every option
+commented out, so the file itself shows what is available. An existing file is
+never overwritten. Point `DOTFILES_CONFIG` at another path to use a different file.
 
-| Setting                      | Where                                                              | Values                    |
-|------------------------------|--------------------------------------------------------------------|---------------------------|
-| `--install-zsh` / `--no-install-zsh` | command line                                               | wins over everything else |
-| `DOTFILES_INSTALL_ZSH`       | environment                                                        | `yes` · `no` · `ask`      |
-| `INSTALL_ZSH`                | `~/.config/dotfiles/bootstrap.conf` (untracked, per machine)       | `yes` · `no` · `ask`      |
+| Key           | Values                | Default | Command line                         | Environment             |
+|---------------|-----------------------|---------|--------------------------------------|-------------------------|
+| `INSTALL_ZSH` | `yes` · `no` · `ask`  | `ask`   | `--install-zsh` / `--no-install-zsh` | `DOTFILES_INSTALL_ZSH`  |
+| `ASSUME_YES`  | `yes` · `no`          | `no`    | `--yes`                              | `DOTFILES_ASSUME_YES`   |
+| `TERMINALS`   | space-separated names | none    | -                                    | `DOTFILES_TERMINALS`    |
 
-Precedence: flag, then environment, then config file, then the default `ask`.
-Point `DOTFILES_CONFIG` at another path to use a different config file.
+Precedence: command line, then environment, then config file, then the default.
 
 ```sh
 # ~/.config/dotfiles/bootstrap.conf
 INSTALL_ZSH=yes
+TERMINALS=alacritty kitty
 ```
 
+> [!NOTE]
+> zsh is installed only on an **explicit "yes"**; `--yes` / `ASSUME_YES` alone never
+> installs it. With `ask` (the default), `bootstrap.sh` prompts when a terminal is
+> available and otherwise prints a hint and carries on, so bash stays fully usable.
+> zsh is installed with `brew` or `apt-get`; `chsh` is never run.
+
 The file is parsed line by line (`KEY=value`, `#` comments), never executed;
-unknown keys and invalid values are reported and ignored. zsh is installed with
-`brew` or `apt-get`. `chsh` is never run.
+unknown keys and invalid values are reported and ignored.
 
 ---
 
@@ -318,7 +325,8 @@ adding or removing files in a package, run `make restow`.
 | 📝 | `nvim/`    | `~/.config/nvim/`                      | opt-in: only stowed if the directory exists                                                                                                       |
 
 Stow a subset with `cd ~/.dotfiles && stow git tmux`; add an extra terminal
-package via `DOTFILES_TERMINALS="alacritty kitty" ./bootstrap.sh`.
+package via `DOTFILES_TERMINALS="alacritty kitty" ./bootstrap.sh` or `TERMINALS` in the
+[bootstrap config](#-bootstrap-configuration).
 
 Per-machine Ghostty overrides go in `~/.config/ghostty.local` (optional, outside
 the stowed directory).
@@ -385,6 +393,7 @@ with [gitleaks](https://github.com/gitleaks/gitleaks).
 
 ```text
 bootstrap.sh              one-shot installer
+bootstrap.conf.example    template for ~/.config/dotfiles/bootstrap.conf (all options, commented out)
 Makefile                  stow / colors / lint / test wrappers
 omnishell/config.toml     version-controlled omnishell config
 zsh/zshrc.zsh             rc library sourced by the generated ~/.zshrc (not stowed)
