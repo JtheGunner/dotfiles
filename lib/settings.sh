@@ -109,14 +109,14 @@ settings_parse() {
 }
 
 # Known keys of [bootstrap] and [ghostty], with the value type each one takes:
-#   enum:a,b,c | bool | list | string | number
+#   enum:a,b,c | bool | list | string | number | positive (> 0) | fraction (0 to 1)
 SETTINGS_SCHEMA='bootstrap.install_zsh enum:yes,no,ask
 bootstrap.assume_yes bool
 bootstrap.terminals list
 ghostty.keybinds enum:auto,mac,linux
 ghostty.font_family string
-ghostty.font_size number
-ghostty.background_opacity number'
+ghostty.font_size positive
+ghostty.background_opacity fraction'
 
 settings_schema_keys() { printf '%s\n' "$SETTINGS_SCHEMA" | awk '{ print $1 }'; }
 
@@ -132,6 +132,8 @@ _settings_value_ok() {
     list) [ "$2" = array ] ;;
     string) [ "$2" = str ] ;;
     number) [ "$2" = int ] || [ "$2" = float ] ;;
+    positive) { [ "$2" = int ] || [ "$2" = float ]; } && awk -v v="$3" 'BEGIN { exit !(v > 0) }' ;;
+    fraction) { [ "$2" = int ] || [ "$2" = float ]; } && awk -v v="$3" 'BEGIN { exit !(v >= 0 && v <= 1) }' ;;
     *) return 1 ;;
   esac
 }
@@ -144,6 +146,10 @@ settings_load() {
   SETTINGS_FILE="$1"
   SETTINGS_RECORDS=""
   [ -r "$1" ] || return 0
+  # an old KEY=value bootstrap.conf (e.g. DOTFILES_CONFIG still points at one)
+  if awk '/^[ \t]*\[/ { t = 1 } /^[ \t]*[A-Z][A-Z_]*[ \t]*=/ { k = 1 } END { exit !(k && !t) }' "$1"; then
+    warn "$1 looks like the old bootstrap.conf format (KEY=value) - convert it to the TOML of config.toml.example"
+  fi
   while IFS="$SETTINGS_US" read -r table key kind value; do
     case "$table" in
       bootstrap | ghostty)
@@ -269,12 +275,23 @@ settings_render_ghostty() {
   [ -z "$v" ] || printf 'background-opacity = %s\n' "$v"
 }
 
+# rename a migrated legacy file to FILE.migrated, or FILE.migrated.N when that exists
+_settings_retire_legacy() {
+  local dest="$1.migrated" n=1
+  while [ -e "$dest" ]; do dest="$1.migrated.$n"; n=$((n + 1)); done
+  mv "$1" "$dest"
+}
+
 # settings_migrate_legacy LEGACY NEW: one-time conversion of the old KEY=value
 # bootstrap.conf. Only runs when LEGACY exists and NEW does not. A legacy file
 # without an active key (the seeded template) is renamed, not converted.
 settings_migrate_legacy() {
   local legacy="$1" new="$2" line key value t list="" install="" assume="" terminals=""
-  { [ -f "$legacy" ] && [ ! -e "$new" ]; } || return 0
+  [ -f "$legacy" ] || return 0
+  if [ -e "$new" ]; then
+    [ "$legacy" = "$new" ] || warn "$legacy is ignored: $new exists (delete $legacy or move its values into $new)"
+    return 0
+  fi
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%%#*}"
     case "$line" in *=*) ;; *) continue ;; esac
@@ -294,7 +311,7 @@ settings_migrate_legacy() {
     esac
   done
   if [ -z "$install$assume$list" ]; then
-    mv "$legacy" "$legacy.migrated"
+    _settings_retire_legacy "$legacy"
     return 0
   fi
   mkdir -p "$(dirname "$new")"
@@ -304,6 +321,6 @@ settings_migrate_legacy() {
     [ -z "$assume" ] || printf 'assume_yes = %s\n' "$assume"
     [ -z "$list" ] || printf 'terminals = [%s]\n' "$list"
   } > "$new"
-  mv "$legacy" "$legacy.migrated"
+  _settings_retire_legacy "$legacy"
   log "migrated $legacy to $new"
 }

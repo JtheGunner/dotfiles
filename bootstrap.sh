@@ -38,6 +38,33 @@ OS="$(uname -s)"
 log()  { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m warn:\033[0m %s\n' "$*" >&2; }
 
+# Command line: --yes / -y and --install-zsh / --no-install-zsh beat the environment
+# and the settings file. Parsed before anything is migrated or written, so --help
+# and a mistyped flag change nothing.
+INSTALL_ZSH_FLAG=""
+ASSUME_YES_FLAG=""
+parse_args() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      -y | --yes) ASSUME_YES_FLAG=1 ;;
+      --install-zsh) INSTALL_ZSH_FLAG=yes ;;
+      --no-install-zsh) INSTALL_ZSH_FLAG=no ;;
+      -h | --help)
+        cat <<USAGE
+usage: $(basename "$0") [--yes] [--install-zsh | --no-install-zsh]
+  --yes             assume "yes" for all prompts (switch rc files + stow links from another checkout to this one);
+                    does NOT install zsh
+  --install-zsh     install zsh if it is missing, without asking
+  --no-install-zsh  never install zsh
+USAGE
+        exit 0 ;;
+      *) printf 'bootstrap.sh: unknown argument: %s\n' "$arg" >&2; exit 2 ;;
+    esac
+  done
+}
+[ -n "${BOOTSTRAP_SOURCE_ONLY:-}" ] || parse_args "$@"
+
 # Settings file (untracked, per machine, seeded from config.toml.example): a
 # restricted TOML subset parsed by lib/settings.sh, never sourced. Precedence
 # everywhere: flag > environment > settings file > default.
@@ -51,38 +78,17 @@ CONF_ASSUME_YES="$(settings_get bootstrap.assume_yes)"
 CONF_TERMINALS="$(settings_get bootstrap.terminals)"
 CONF_GHOSTTY_KEYBINDS="$(settings_get ghostty.keybinds)"
 
-# --yes / -y (or DOTFILES_ASSUME_YES=1, or assume_yes = true in the settings file):
-# don't prompt - e.g. switch rc files and stow links from another checkout to this
-# one without asking.
-if [ -n "${DOTFILES_ASSUME_YES:-${ASSUME_YES:-}}" ]; then
-  ASSUME_YES="${DOTFILES_ASSUME_YES:-$ASSUME_YES}"
-elif [ "$CONF_ASSUME_YES" = true ]; then
-  ASSUME_YES=1
-else
-  ASSUME_YES=0
-fi
-# --install-zsh / --no-install-zsh: explicit zsh choice, beats env and config file.
-INSTALL_ZSH_FLAG=""
-if [ -z "${BOOTSTRAP_SOURCE_ONLY:-}" ]; then
-  for _arg in "$@"; do
-    case "$_arg" in
-      -y | --yes) ASSUME_YES=1 ;;
-      --install-zsh) INSTALL_ZSH_FLAG=yes ;;
-      --no-install-zsh) INSTALL_ZSH_FLAG=no ;;
-      -h | --help)
-        cat <<USAGE
-usage: $(basename "$0") [--yes] [--install-zsh | --no-install-zsh]
-  --yes             assume "yes" for all prompts (switch rc files + stow links from another checkout to this one);
-                    does NOT install zsh
-  --install-zsh     install zsh if it is missing, without asking
-  --no-install-zsh  never install zsh
-USAGE
-        exit 0 ;;
-      *) printf 'bootstrap.sh: unknown argument: %s\n' "$_arg" >&2; exit 2 ;;
-    esac
-  done
-  unset _arg
-fi
+# ASSUME_YES: --yes, then DOTFILES_ASSUME_YES / ASSUME_YES=1, then assume_yes = true
+# in the settings file. Don't prompt - e.g. switch rc files and stow links from
+# another checkout to this one without asking.
+ASSUME_YES_ENV="${DOTFILES_ASSUME_YES:-${ASSUME_YES:-}}"
+resolve_assume_yes() {
+  if [ -n "$ASSUME_YES_FLAG" ]; then ASSUME_YES=1
+  elif [ -n "$ASSUME_YES_ENV" ]; then ASSUME_YES="$ASSUME_YES_ENV"
+  elif [ "$CONF_ASSUME_YES" = true ]; then ASSUME_YES=1
+  else ASSUME_YES=0; fi
+}
+resolve_assume_yes
 
 # use sudo only when not root and it's available (CI / containers run as root)
 if [ "$(id -u)" -eq 0 ]; then SUDO=""
@@ -95,11 +101,17 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # stow packages = top-level dirs that ship standalone config FILES (not rc files).
 # Ghostty is the terminal of choice; extra terminal packages via DOTFILES_TERMINALS
-# or TERMINALS in the settings file.
+# or `terminals` in the [bootstrap] table of the settings file. Names are plain
+# package directory names; globbing is off while the list is split.
 PACKAGES=(zsh git tmux bat ghostty)
+set -f
 for t in ${DOTFILES_TERMINALS:-$CONF_TERMINALS}; do
+  case "$t" in
+    *[!A-Za-z0-9_.-]*) warn "ignoring terminal '$t': not a valid package name"; continue ;;
+  esac
   case " ${PACKAGES[*]} " in *" $t "*) ;; *) [ -d "$DOTFILES/$t" ] && PACKAGES+=("$t") ;; esac
 done
+set +f
 [ -d "$DOTFILES/nvim" ] && PACKAGES+=(nvim)
 
 # omnishell 0.3.0 introduced the modules omnishell/config.toml enables (starship,
