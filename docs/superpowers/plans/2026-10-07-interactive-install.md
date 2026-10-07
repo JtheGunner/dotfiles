@@ -474,7 +474,7 @@ fresh() { rm -rf "${WORK:?}/cfg" "${WORK:?}/home"; mkdir -p "$WORK/cfg" "$WORK/h
 ix_run() {
   RC=0
   OUT="$(printf '%b' "$1" | env -i PATH="$WORK/bin" HOME="$WORK/home" DOTFILES_CONFIG="$CONF" BOOTSTRAP_SOURCE_ONLY=1 \
-    "$BASH" -c ". '$DOTFILES/bootstrap.sh'; interactive_tty() { return 0; }; $2" 2>"$WORK/err")" || RC=$?
+    "$BASH" -c ". '$DOTFILES/bootstrap.sh'; INTERACTIVE_FLAG=1; interactive_tty() { return 0; }; $2" 2>"$WORK/err")" || RC=$?
 }
 
 echo ">> arguments and preconditions"
@@ -684,7 +684,7 @@ check "the prompts show table.key and unset"                'grep -q "bootstrap.
 echo ">> prompts: answers are validated and written"
 fresh
 ix_run "yes\n\nfoot, kitty\nbogus\nlinux\n$(empties 16)y\n" 'interactive_settings; printf "%s|%s" "$CONF_INSTALL_ZSH" "$CONF_TERMINALS"'
-check "the run succeeds and reloads the settings"           '[ "$RC" = 0 ] && [ "$(tail -1 <<< "$OUT")" = "yes|foot kitty" ]'
+check "the run succeeds and reloads the settings"           '[ "$RC" = 0 ] && grep -q "yes|foot kitty\$" <<< "$OUT"'
 check "install_zsh is written"                              'grep -qx "install_zsh = \"yes\"" "$CONF"'
 check "the list is written"                                 'grep -qx "terminals = \[\"foot\", \"kitty\"\]" "$CONF"'
 check "an invalid answer is asked again"                    'grep -q "invalid value for ghostty.keybinds" "$WORK/err" || grep -q "invalid value for ghostty.keybinds" <<< "$OUT"'
@@ -746,7 +746,7 @@ check "a failing TUI stops with its exit code"              '[ "$RC" = 3 ] && ! 
 check "and the file is untouched"                           'cmp -s "$CONF" "$DOTFILES/config.toml.example"'
 
 fresh; : > "$WORK/omnishell.log"
-ix_run "" 'unset INTERACTIVE_FLAG; interactive_settings; interactive_modules; echo AFTER'
+ix_run "" 'INTERACTIVE_FLAG=; interactive_settings; interactive_modules; echo AFTER'
 check "both steps do nothing without --interactive"         '[ "$RC" = 0 ] && grep -q AFTER <<< "$OUT" && [ ! -s "$WORK/omnishell.log" ] && cmp -s "$CONF" "$DOTFILES/config.toml.example"'
 ```
 
@@ -784,7 +784,8 @@ _prompt_line() {
 interactive_collect() {
   local key type table name current hint literal
   log "dotfiles settings: Enter keeps the shown value, - unsets it"
-  while IFS=' ' read -r key type; do
+  # the schema comes in on fd 3: the prompts below read the user's typing from stdin
+  while IFS=' ' read -r key type <&3; do
     table="${key%%.*}"; name="${key#*.}"
     case "$table" in bootstrap | ghostty | tmux | git) ;; *) continue ;; esac
     current="$(settings_get "$key")"
@@ -804,7 +805,7 @@ interactive_collect() {
       fi
       warn "invalid value for $key (expected $hint)"
     done
-  done <<< "$SETTINGS_SCHEMA"
+  done 3<<< "$SETTINGS_SCHEMA"
 }
 
 # NEWFILE [NOTE]: show the diff against the settings file and ask before replacing

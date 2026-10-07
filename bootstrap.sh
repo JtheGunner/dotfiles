@@ -995,6 +995,114 @@ setup_terminal_app() {
   warn "restart Terminal.app for the 'Root Loops' profile to take effect"
 }
 
+# --------------------------------------------------------------------------
+# --interactive: ask for the settings, pick the modules in `omnishell tui`, and
+# write both into the settings file (after a diff and a confirmation)
+# --------------------------------------------------------------------------
+INTERACTIVE_CHANGES=""
+
+# PROMPT: reads one line into REPLY; end of input aborts before anything changes
+_prompt_line() {
+  printf '%s' "$1"
+  IFS= read -r REPLY || {
+    printf '\n' >&2
+    warn "input closed - nothing was written or installed"
+    exit 1
+  }
+}
+
+# Ask for every [bootstrap] / [ghostty] / [tmux] / [git] key of the schema.
+# Enter keeps the value, "-" unsets it; INTERACTIVE_CHANGES collects table<US>key<US>literal.
+interactive_collect() {
+  local key type table name current hint literal
+  log "dotfiles settings: Enter keeps the shown value, - unsets it"
+  # the schema comes in on fd 3: the prompts below read the user's typing from stdin
+  while IFS=' ' read -r key type <&3; do
+    table="${key%%.*}"; name="${key#*.}"
+    case "$table" in bootstrap | ghostty | tmux | git) ;; *) continue ;; esac
+    current="$(settings_get "$key")"
+    case "$type" in
+      list) hint="names separated by spaces or commas" ;;
+      *) hint="${type#enum:}" ;;
+    esac
+    while :; do
+      _prompt_line "$key ($hint) [${current:-unset}]: "
+      case "$REPLY" in
+        "") break ;;
+        -) INTERACTIVE_CHANGES="${INTERACTIVE_CHANGES}${table}${SETTINGS_US}${name}${SETTINGS_US}"$'\n'; break ;;
+      esac
+      if literal="$(_settings_literal "$type" "$REPLY")"; then
+        INTERACTIVE_CHANGES="${INTERACTIVE_CHANGES}${table}${SETTINGS_US}${name}${SETTINGS_US}${literal}"$'\n'
+        break
+      fi
+      warn "invalid value for $key (expected $hint)"
+    done
+  done 3<<< "$SETTINGS_SCHEMA"
+}
+
+# NEWFILE [NOTE]: show the diff against the settings file and ask before replacing
+# it (the old one is kept as .bak). Returns 0 when written or unchanged, 1 when declined.
+_review_and_install() {
+  local new="$1"
+  if cmp -s "$BOOTSTRAP_CONFIG" "$new"; then
+    log "no changes to $BOOTSTRAP_CONFIG"
+    return 0
+  fi
+  diff -u "$BOOTSTRAP_CONFIG" "$new" || true
+  [ -z "${2:-}" ] || log "$2"
+  _prompt_line "Write these changes to $BOOTSTRAP_CONFIG? [y/N] "
+  case "$REPLY" in y | Y | yes | YES) ;; *) return 1 ;; esac
+  { cp "$BOOTSTRAP_CONFIG" "$BOOTSTRAP_CONFIG.bak" && cat "$new" > "$BOOTSTRAP_CONFIG"; } || {
+    warn "cannot write $BOOTSTRAP_CONFIG"
+    exit 1
+  }
+}
+
+# before anything is installed: the dotfiles-owned prompts
+interactive_settings() {
+  [ -n "$INTERACTIVE_FLAG" ] || return 0
+  local tmp
+  interactive_collect
+  if [ -z "$INTERACTIVE_CHANGES" ]; then
+    log "settings unchanged"
+    return 0
+  fi
+  tmp="$(mktemp)"
+  settings_update_file "$BOOTSTRAP_CONFIG" "$INTERACTIVE_CHANGES" > "$tmp"
+  if ! _review_and_install "$tmp"; then
+    rm -f "$tmp"
+    log "nothing written, nothing installed"
+    exit 0
+  fi
+  rm -f "$tmp"
+  reload_settings
+}
+
+# after omnishell is installed: the module selection in its TUI. The TUI edits
+# the live omnishell config (merged from the tracked default and the settings
+# file); what it leaves behind is compared with the default and written back.
+interactive_modules() {
+  [ -n "$INTERACTIVE_FLAG" ] || return 0
+  local live tmp rc=0
+  prepare_omnishell_config
+  live="${XDG_CONFIG_HOME:-$HOME/.config}/omnishell/config.toml"
+  log "omnishell tui: Space toggles a module, o edits its options, a previews the plan, q quits"
+  omnishell tui || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    warn "omnishell tui exited with $rc - the module selection was not taken over"
+    exit "$rc"
+  fi
+  tmp="$(mktemp)"
+  settings_update_omnishell "$BOOTSTRAP_CONFIG" "$live" "$DOTFILES/omnishell/config.toml" > "$tmp"
+  if ! _review_and_install "$tmp" "this machine already follows what you chose in the TUI (a applies it); y keeps it in $BOOTSTRAP_CONFIG too, n leaves the file as it was"; then
+    rm -f "$tmp"
+    log "nothing written, nothing installed"
+    exit 0
+  fi
+  rm -f "$tmp"
+  reload_settings
+}
+
 # both ends must be a terminal for the prompts and the TUI (tests redefine this)
 interactive_tty() { [ -t 0 ] && [ -t 1 ]; }
 
@@ -1009,10 +1117,12 @@ main() {
   check_interactive_preconditions
   check_checkout_consistency
   seed_bootstrap_config
+  interactive_settings
   install_deps
   ensure_zsh
   install_ghostty
   install_omnishell
+  interactive_modules
   write_rc_base
   stow_packages
   setup_ghostty_keybinds
