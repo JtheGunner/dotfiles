@@ -110,9 +110,8 @@ A missing file is not an error. Every invalid line, key or value produces one
 
 ## Dependencies and risks
 
-- Needs DOTFI-8 (merged) and the `[ghostty] keybinds` hook from DOTFI-9 (PR #19).
-  Until #19 is merged this branch implements bootstrap and omnishell, and adds the
-  `[ghostty]` table after rebasing onto it.
+- Builds on DOTFI-8 and DOTFI-9, both merged: `setup_ghostty_keybinds` and
+  `DOTFILES_GHOSTTY_KEYBINDS` already exist.
 - Table-level replacement means overriding one omnishell option requires restating
   that option's whole table. Chosen over key-level merging to keep the awk simple
   and the result predictable.
