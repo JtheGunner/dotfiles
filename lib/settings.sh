@@ -165,6 +165,45 @@ _settings_value_ok() {
   esac
 }
 
+# _settings_literal TYPE ANSWER: the TOML literal for a prompt answer, printed to
+# stdout; returns 1 (printing nothing) when the answer is empty, has a control
+# character, or is not valid for TYPE by the rules used when the file is read.
+_settings_literal() {
+  local type="$1" ans="$2" kind value="" item out="" sep="" int_re='^-?[0-9]+$' float_re='^-?[0-9]+\.[0-9]+$'
+  [ -n "$ans" ] || return 1
+  case "$ans" in *[[:cntrl:]]*) return 1 ;; esac
+  case "$type" in
+    bool)
+      case "$ans" in
+        true | yes | y) kind=bool; value=true ;;
+        false | no | n) kind=bool; value=false ;;
+        *) return 1 ;;
+      esac ;;
+    list)
+      kind=array
+      set -f
+      for item in ${ans//,/ }; do
+        case "$item" in *[\"\\]*) set +f; return 1 ;; esac
+        value="${value}${value:+$SETTINGS_RS}s$item"
+        out="${out}${sep}\"$item\""; sep=", "
+      done
+      set +f
+      [ -n "$value" ] || return 1 ;;
+    number | positive | fraction | nonneg | posint)
+      if [[ "$ans" =~ $int_re ]]; then kind=int
+      elif [[ "$ans" =~ $float_re ]]; then kind=float
+      else return 1; fi
+      value="$ans" ;;
+    *) kind=str; value="$ans" ;;
+  esac
+  _settings_value_ok "$type" "$kind" "$value" || return 1
+  case "$kind" in
+    str) printf '"%s"\n' "$(printf '%s' "$value" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')" ;;
+    array) printf '[%s]\n' "$out" ;;
+    *) printf '%s\n' "$value" ;;
+  esac
+}
+
 # settings_load FILE: parse and validate into SETTINGS_RECORDS. [bootstrap] and
 # [ghostty] keys must be in the schema with the right type; omnishell and
 # modules.* tables pass through (omnishell validate checks those later).

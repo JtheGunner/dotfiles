@@ -336,6 +336,28 @@ write '[bootstrap]' 'install_zsh = "ask"'
 settings_load "$F" 2>/dev/null
 check "no git keys render nothing"                                    '[ -z "$(settings_render_git)" ]'
 
+echo ">> _settings_literal"
+lit() { _settings_literal "$@" 2>/dev/null; }
+check "enum answer becomes a quoted string"       '[ "$(lit enum:yes,no,ask yes)" = "\"yes\"" ]'
+check "enum rejects a value outside the list"     '! lit enum:yes,no,ask maybe >/dev/null'
+check "bool accepts yes and prints true"          '[ "$(lit bool yes)" = true ]'
+check "bool accepts false"                        '[ "$(lit bool false)" = false ]'
+check "bool rejects maybe"                        '! lit bool maybe >/dev/null'
+check "list splits on spaces and commas"         '[ "$(lit list "a, b c")" = "[\"a\", \"b\", \"c\"]" ]'
+check "list rejects a quote"                      '! lit list "a\"b" >/dev/null'
+check "list rejects an empty list"                '! lit list " , " >/dev/null'
+check "positive number stays bare"                '[ "$(lit positive 13.5)" = 13.5 ]'
+check "positive rejects 0"                        '! lit positive 0 >/dev/null'
+check "fraction rejects 1.5"                      '! lit fraction 1.5 >/dev/null'
+check "nonneg rejects a float"                    '! lit nonneg 1.5 >/dev/null'
+check "posint rejects text"                       '! lit posint abc >/dev/null'
+check "string escapes a quote and a backslash"    '[ "$(lit string "a\"b\\c")" = "\"a\\\"b\\\\c\"" ]'
+check "tmuxkey accepts C-a"                       '[ "$(lit tmuxkey C-a)" = "\"C-a\"" ]'
+check "tmuxkey rejects ctrl-a"                    '! lit tmuxkey ctrl-a >/dev/null'
+check "email rejects a missing at-sign"           '! lit email nobody >/dev/null'
+check "an empty answer is rejected"               '! lit string "" >/dev/null'
+check "a control character is rejected"           '! lit string "$(printf "a\tb")" >/dev/null'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
