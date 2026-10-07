@@ -210,6 +210,13 @@ cp "$NEW" "$NEW.bak"
 settings_migrate_legacy "$LEG" "$NEW" >/dev/null 2>&1
 check "an existing config.toml is never touched" 'cmp -s "$NEW" "$NEW.bak" && [ -f "$LEG" ]'
 
+echo ">> parser: control characters"
+printf '[bootstrap]\nx = "a\037b"\ny = ["p\036Zq"]\nz = 1\n' > "$F"
+OUT="$(rec)"
+check "a control character in a string rejects the line" '! grep -q "^bootstrap|x|" <<< "$OUT" && ! grep -q "^bootstrap|y|" <<< "$OUT"'
+check "and warns about it"                               'grep -q "control character" "$ERR"'
+check "other lines still parse"                          'grep -qxF "bootstrap|z|int|1" <<< "$OUT"'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

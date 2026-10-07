@@ -81,9 +81,11 @@ settings_parse() {
       SK = "array"; SV = out
       return 1
     }
-    FNR == 1 && substr($0, 1, 3) == "\357\273\277" { $0 = substr($0, 4) }
+    BEGIN { bom = "\357\273\277" }
+    FNR == 1 && substr($0, 1, length(bom)) == bom { $0 = substr($0, length(bom) + 1) }
     { line = trim(strip_comment($0)) }
     line == "" { next }
+    line ~ /[\001-\010\013\014\016-\037\177]/ { warn("control character"); next }
     line ~ /^\[/ {
       if (line !~ /^\[[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*\]$/) { warn("invalid table header"); skip = 1; table = ""; next }
       table = substr(line, 2, length(line) - 2)

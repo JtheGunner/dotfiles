@@ -143,6 +143,13 @@ check "DOTFILES_GHOSTTY_KEYBINDS beats the file"      '[ "$(readlink "$WORK/home
 check "the Ghostty config includes the generated file before ghostty.local" \
   '[ "$(grep -n "^config-file" "$DOTFILES/ghostty/.config/ghostty/config" | cut -d: -f2- | tr -d " ?" | tr "\n" " ")" = "config-file=~/.config/ghostty-keybinds.conf config-file=~/.config/ghostty-settings.conf config-file=~/.config/ghostty.local " ]'
 
+echo ">> a failing validate keeps the live omnishell config"
+fresh; : > "$LOG"; conf '[modules.zoxide]' 'enabled = true'
+mkdir -p "$WORK/home/.config/omnishell"; printf 'OLD\n' > "$OMNI_CONF"
+sh_run "OMNISHELL_LOG=$LOG OMNISHELL_VALIDATE_RC=2" 'apply_omnishell; echo not-reached'
+check "the live config is untouched"        '[ "$(cat "$OMNI_CONF")" = OLD ]'
+check "omnishell init is not run either"    '! grep -q "^init" "$LOG"'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

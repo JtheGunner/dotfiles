@@ -760,15 +760,27 @@ _write_omnishell_config() {
   settings_merge_omnishell "$DOTFILES/omnishell/config.toml" > "$cfgdir/config.toml"
 }
 
+# validate the merged config in a scratch XDG dir first, so a bad setting never
+# replaces the working ~/.config/omnishell/config.toml
+_validate_omnishell_config() {
+  local tmp rc=0
+  tmp="$(mktemp -d)"
+  mkdir -p "$tmp/omnishell"
+  settings_merge_omnishell "$DOTFILES/omnishell/config.toml" > "$tmp/omnishell/config.toml"
+  XDG_CONFIG_HOME="$tmp" omnishell validate || rc=$?
+  rm -rf "$tmp"
+  return "$rc"
+}
+
 apply_omnishell() {
+  _validate_omnishell_config || {
+    warn "the omnishell config is invalid - fix the [omnishell] / [modules.*] tables in $BOOTSTRAP_CONFIG (the current omnishell config was left as it is)"
+    exit 2
+  }
   _write_omnishell_config
   log "omnishell init + apply"
   omnishell init -y 2>/dev/null || omnishell init || true
   _write_omnishell_config   # init may template a fresh one
-  omnishell validate || {
-    warn "the omnishell config is invalid - fix the [omnishell] / [modules.*] tables in $BOOTSTRAP_CONFIG"
-    exit 2
-  }
   # exit 1 = degraded module(s) (e.g. eza is not in Debian stable) - a state, not
   # a crash; keep going and list them again at the end (a long run buries them
   # mid-log). exit >=2 = config/other error - abort.
