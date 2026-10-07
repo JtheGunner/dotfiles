@@ -2,7 +2,7 @@
 # Bootstrap this dotfiles repo on a fresh machine.
 #
 #   git clone https://github.com/JtheGunner/dotfiles ~/.dotfiles
-#   ~/.dotfiles/bootstrap.sh [--yes]
+#   ~/.dotfiles/bootstrap.sh [--yes] [--install-zsh | --no-install-zsh]
 #
 # Run it from whichever checkout you want to be live - it installs from there.
 # Before changing anything it checks every reference to a checkout (the DOTFILES=
@@ -25,6 +25,9 @@
 # and step 5 append to them, and a symlink would write those edits back into the
 # repo. The pristine rc content lives in zsh/zshrc.zsh + bash/bashrc.bash.
 #
+# zsh is installed only on an explicit "yes" (--install-zsh, DOTFILES_INSTALL_ZSH=yes
+# or INSTALL_ZSH=yes in ~/.config/dotfiles/bootstrap.conf) - never by --yes alone.
+#
 # It never runs `chsh`: whatever your current login shell is (bash or zsh) is
 # what gets configured.
 set -euo pipefail
@@ -35,12 +38,22 @@ OS="$(uname -s)"
 # --yes / -y (or DOTFILES_ASSUME_YES=1): don't prompt - e.g. switch rc files and
 # stow links from another checkout to this one without asking.
 ASSUME_YES="${DOTFILES_ASSUME_YES:-${ASSUME_YES:-0}}"
+# --install-zsh / --no-install-zsh: explicit zsh choice, beats env and config file.
+INSTALL_ZSH_FLAG=""
 if [ -z "${BOOTSTRAP_SOURCE_ONLY:-}" ]; then
   for _arg in "$@"; do
     case "$_arg" in
       -y | --yes) ASSUME_YES=1 ;;
+      --install-zsh) INSTALL_ZSH_FLAG=yes ;;
+      --no-install-zsh) INSTALL_ZSH_FLAG=no ;;
       -h | --help)
-        printf 'usage: %s [--yes]\n  --yes  assume "yes" for all prompts (switch rc files + stow links from another checkout to this one)\n' "$(basename "$0")"
+        cat <<USAGE
+usage: $(basename "$0") [--yes] [--install-zsh | --no-install-zsh]
+  --yes             assume "yes" for all prompts (switch rc files + stow links from another checkout to this one);
+                    does NOT install zsh
+  --install-zsh     install zsh if it is missing, without asking
+  --no-install-zsh  never install zsh
+USAGE
         exit 0 ;;
       *) printf 'bootstrap.sh: unknown argument: %s\n' "$_arg" >&2; exit 2 ;;
     esac
@@ -153,6 +166,75 @@ install_deps() {
     warn "Install it (e.g. 'apt-get install stow' / 'brew install stow') and re-run."
     exit 1
   }
+}
+
+# --------------------------------------------------------------------------
+# 1a. optional zsh install. Mode (yes | no | ask), highest precedence first:
+#     --install-zsh / --no-install-zsh, DOTFILES_INSTALL_ZSH, INSTALL_ZSH in
+#     the untracked ~/.config/dotfiles/bootstrap.conf (DOTFILES_CONFIG overrides
+#     the path), default ask. --yes never counts as a "yes" for zsh.
+# --------------------------------------------------------------------------
+_valid_install_zsh() { case "$1" in yes | no | ask) return 0 ;; *) return 1 ;; esac; }
+
+# Print the INSTALL_ZSH value from the config file. The file is parsed, never
+# sourced: only KEY=value lines (spaces and trailing # comments tolerated) and
+# only known keys.
+_config_install_zsh() {
+  local conf="${DOTFILES_CONFIG:-$HOME/.config/dotfiles/bootstrap.conf}" line key value result=""
+  [ -r "$conf" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%%#*}"
+    case "$line" in *=*) ;; *) continue ;; esac
+    key="$(printf '%s' "${line%%=*}" | tr -d '[:space:]')"
+    value="$(printf '%s' "${line#*=}" | tr -d '[:space:]')"
+    case "$key" in
+      INSTALL_ZSH)
+        if _valid_install_zsh "$value"; then result="$value"
+        else warn "$conf: invalid INSTALL_ZSH value '$value' (use yes, no or ask) - ignored"; fi ;;
+      *) warn "$conf: unknown key '$key' - ignored" ;;
+    esac
+  done < "$conf"
+  printf '%s' "$result"
+}
+
+_install_zsh_mode() {
+  local mode="$INSTALL_ZSH_FLAG"
+  if [ -z "$mode" ] && [ -n "${DOTFILES_INSTALL_ZSH:-}" ]; then
+    if _valid_install_zsh "$DOTFILES_INSTALL_ZSH"; then mode="$DOTFILES_INSTALL_ZSH"
+    else warn "invalid DOTFILES_INSTALL_ZSH value '$DOTFILES_INSTALL_ZSH' (use yes, no or ask) - ignored"; fi
+  fi
+  [ -n "$mode" ] || mode="$(_config_install_zsh)"
+  printf '%s' "${mode:-ask}"
+}
+
+_install_zsh_package() {
+  if command -v brew >/dev/null 2>&1; then
+    brew install zsh
+  elif command -v apt-get >/dev/null 2>&1; then
+    $SUDO apt-get install -y -qq zsh
+  else
+    return 1
+  fi
+}
+
+_zsh_hint() {
+  warn "zsh is not installed ($1) - ~/.zshrc is written but unused until you install it"
+  warn "  e.g. 'sudo apt-get install zsh' / 'brew install zsh', or re-run with --install-zsh"
+}
+
+ensure_zsh() {
+  command -v zsh >/dev/null 2>&1 && return 0
+  case "$(_install_zsh_mode)" in
+    no) _zsh_hint "INSTALL_ZSH=no"; return 0 ;;
+    ask)
+      # --yes is not a "yes" for zsh: only an explicit setting installs it
+      if [ "${ASSUME_YES:-0}" = "1" ] || ! _confirm "zsh is not installed - install it now?"; then
+        _zsh_hint "not requested"
+        return 0
+      fi ;;
+  esac
+  log "installing zsh"
+  _install_zsh_package || warn "zsh could not be installed - install it manually"
 }
 
 # --------------------------------------------------------------------------
@@ -709,6 +791,7 @@ setup_terminal_app() {
 main() {
   check_checkout_consistency
   install_deps
+  ensure_zsh
   install_ghostty
   install_omnishell
   write_rc_base

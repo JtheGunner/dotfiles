@@ -71,7 +71,7 @@ exec $SHELL
 `bootstrap.sh`:
 
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
-2. installs dependencies, omnishell (upgrading it below 0.6.0) and Ghostty; on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
+2. installs dependencies, omnishell (upgrading it below 0.6.0) and Ghostty, and zsh if you opted in (see [Bootstrap configuration](#-bootstrap-configuration)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
 4. stows the packages
 5. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
@@ -81,7 +81,7 @@ exec $SHELL
 
 It never runs `chsh`, and re-running it is safe. An existing handwritten
 `~/.zshrc` is moved to `~/.zshrc.pre-dotfiles` first. Pass `--yes` to answer every
-prompt with "yes" (and skip the identity prompt).
+prompt with "yes" (and skip the identity prompt). `--yes` never installs zsh.
 
 > [!TIP]
 > Run it from whichever checkout you want to be live: it installs from there. If
@@ -128,6 +128,32 @@ pass `--yes` (`DOTFILES_ASSUME_YES=1`) to switch without asking.
 cd ~/.dotfiles
 stow git tmux bat # only the packages you want
 ```
+
+---
+
+## ⚙️ Bootstrap configuration
+
+zsh is installed only on an **explicit "yes"**. `--yes` alone never installs it.
+Without a setting, `bootstrap.sh` asks when zsh is missing and a terminal is
+available; otherwise it prints a hint and carries on (bash stays fully usable).
+
+| Setting                      | Where                                                              | Values                    |
+|------------------------------|--------------------------------------------------------------------|---------------------------|
+| `--install-zsh` / `--no-install-zsh` | command line                                               | wins over everything else |
+| `DOTFILES_INSTALL_ZSH`       | environment                                                        | `yes` · `no` · `ask`      |
+| `INSTALL_ZSH`                | `~/.config/dotfiles/bootstrap.conf` (untracked, per machine)       | `yes` · `no` · `ask`      |
+
+Precedence: flag, then environment, then config file, then the default `ask`.
+Point `DOTFILES_CONFIG` at another path to use a different config file.
+
+```sh
+# ~/.config/dotfiles/bootstrap.conf
+INSTALL_ZSH=yes
+```
+
+The file is parsed line by line (`KEY=value`, `#` comments), never executed;
+unknown keys and invalid values are reported and ignored. zsh is installed with
+`brew` or `apt-get`. `chsh` is never run.
 
 ---
 
