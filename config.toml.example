@@ -1,0 +1,51 @@
+# Settings for bootstrap.sh - machine-specific, not version-controlled.
+#
+# bootstrap.sh copies this template to ~/.config/dotfiles/config.toml on the first
+# run and never overwrites that file afterwards. Remove the leading "# " from a
+# table header and a key to change a setting.
+#
+# Format: a small TOML subset - [tables], key = value with strings, numbers,
+# booleans and one-line arrays, and # comments. The file is parsed, never
+# executed; unknown tables, unknown keys and invalid values are reported and
+# ignored.
+# Precedence: command-line flag > environment variable > this file > default.
+
+# [bootstrap]
+#
+# Install zsh when it is missing: "yes", "no" or "ask". Only an explicit "yes"
+# installs it; --yes alone never does. "ask" prompts when a terminal is available
+# and otherwise prints a hint.
+# Flags: --install-zsh / --no-install-zsh    Environment: DOTFILES_INSTALL_ZSH
+#install_zsh = "ask"
+#
+# Answer "yes" to every prompt, e.g. switch rc files and stow links from another
+# checkout to this one.
+# Flag: --yes    Environment: DOTFILES_ASSUME_YES (1 or 0)
+#assume_yes = false
+#
+# Extra terminal stow packages (Ghostty is always stowed).
+# Environment: DOTFILES_TERMINALS (space-separated)
+#terminals = []
+
+# [ghostty]
+#
+# Keybind scheme: "auto" (macOS: mac, otherwise linux), "mac" or "linux".
+# Environment: DOTFILES_GHOSTTY_KEYBINDS
+#keybinds = "auto"
+#
+# Written to ~/.config/ghostty-settings.conf; an unset key keeps the default from
+# the tracked Ghostty config. Hand-written overrides in ~/.config/ghostty.local
+# still win.
+#font_family = "Cascadia Mono NF"
+#font_size = 12
+#background_opacity = 0.98
+
+# omnishell: a table below replaces the whole table of the same name in the
+# tracked omnishell/config.toml - restate every key you want to keep. Tables the
+# default does not have are added. `omnishell validate` checks the result.
+#
+# [modules.history.options]
+# size = 50000
+#
+# [modules.zoxide]
+# enabled = false

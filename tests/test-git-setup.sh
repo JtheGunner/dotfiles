@@ -15,7 +15,7 @@ check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
 # A PATH with only what the functions under test need, so `delta` is present
 # exactly when a test puts a fake one in $WORK/bin.
 mkdir -p "$WORK/bin"
-for tool in git head rm cat mkdir basename dirname uname id; do
+for tool in git head rm cat mkdir basename dirname uname id awk mv tr; do
   ln -s "$(command -v "$tool")" "$WORK/bin/$tool"
 done
 with_delta()    { printf '#!/bin/sh\n' > "$WORK/bin/delta"; chmod +x "$WORK/bin/delta"; }
