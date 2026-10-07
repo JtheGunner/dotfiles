@@ -103,3 +103,70 @@ settings_parse() {
     }
   ' "$1"
 }
+
+# Known keys of [bootstrap] and [ghostty], with the value type each one takes:
+#   enum:a,b,c | bool | list | string | number
+SETTINGS_SCHEMA='bootstrap.install_zsh enum:yes,no,ask
+bootstrap.assume_yes bool
+bootstrap.terminals list
+ghostty.keybinds enum:auto,mac,linux
+ghostty.font_family string
+ghostty.font_size number
+ghostty.background_opacity number'
+
+settings_schema_keys() { printf '%s\n' "$SETTINGS_SCHEMA" | awk '{ print $1 }'; }
+
+_settings_type() { printf '%s\n' "$SETTINGS_SCHEMA" | awk -v k="$1" '$1 == k { print $2 }'; }
+
+# _settings_value_ok TYPE KIND VALUE
+_settings_value_ok() {
+  case "$1" in
+    enum:*) [ "$2" = str ] || return 1
+            case ",${1#enum:}," in *",$3,"*) return 0 ;; esac
+            return 1 ;;
+    bool) [ "$2" = bool ] ;;
+    list) [ "$2" = array ] ;;
+    string) [ "$2" = str ] ;;
+    number) [ "$2" = int ] || [ "$2" = float ] ;;
+    *) return 1 ;;
+  esac
+}
+
+# settings_load FILE: parse and validate into SETTINGS_RECORDS. [bootstrap] and
+# [ghostty] keys must be in the schema with the right type; omnishell and
+# modules.* tables pass through (omnishell validate checks those later).
+settings_load() {
+  local table key kind value type
+  SETTINGS_FILE="$1"
+  SETTINGS_RECORDS=""
+  [ -r "$1" ] || return 0
+  while IFS="$SETTINGS_US" read -r table key kind value; do
+    case "$table" in
+      bootstrap | ghostty)
+        type="$(_settings_type "$table.$key")"
+        if [ -z "$type" ]; then
+          warn "$1: unknown key '$key' in [$table] - ignored"
+          continue
+        fi
+        if ! _settings_value_ok "$type" "$kind" "$value"; then
+          warn "$1: invalid $table.$key value '${value//$SETTINGS_RS/,}' (expected ${type#enum:}) - ignored"
+          continue
+        fi ;;
+    esac
+    SETTINGS_RECORDS="${SETTINGS_RECORDS}${table}${SETTINGS_US}${key}${SETTINGS_US}${kind}${SETTINGS_US}${value}"$'\n'
+  done < <(settings_parse "$1")
+}
+
+# settings_get table.key: the value; arrays space-separated; empty when unset.
+settings_get() {
+  printf '%s' "$SETTINGS_RECORDS" | awk -F"$SETTINGS_US" -v t="${1%.*}" -v k="${1##*.}" -v rs="$SETTINGS_RS" '
+    $1 == t && $2 == k { v = $4; kind = $3 }
+    END {
+      if (kind == "array") {
+        n = split(v, a, rs); out = ""
+        for (i = 1; i <= n; i++) out = out (i > 1 ? " " : "") substr(a[i], 2)
+        v = out
+      }
+      printf "%s", v
+    }'
+}

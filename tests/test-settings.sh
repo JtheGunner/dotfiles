@@ -92,6 +92,37 @@ write '[[array.of.tables]]' 'x = 1'
 OUT="$(rec)"
 check "array of tables is rejected" '[ -z "$OUT" ] && grep -q "invalid table header" "$ERR"'
 
+echo ">> load, validation and getters"
+write '[bootstrap]' 'install_zsh = "yes"' 'assume_yes = true' 'terminals = ["alacritty", "kitty"]' \
+  '[ghostty]' 'keybinds = "linux"' 'font_family = "Cascadia Mono NF"' 'font_size = 13' 'background_opacity = 0.9'
+settings_load "$F" 2>"$ERR"
+check "string getter"                 '[ "$(settings_get bootstrap.install_zsh)" = yes ]'
+check "boolean getter"                '[ "$(settings_get bootstrap.assume_yes)" = true ]'
+check "list getter is space separated" '[ "$(settings_get bootstrap.terminals)" = "alacritty kitty" ]'
+check "string with spaces"            '[ "$(settings_get ghostty.font_family)" = "Cascadia Mono NF" ]'
+check "number getter"                 '[ "$(settings_get ghostty.font_size)" = 13 ]'
+check "unset key is empty"            '[ -z "$(settings_get ghostty.nothing)" ]'
+check "a valid file warns about nothing" '[ ! -s "$ERR" ]'
+
+write '[bootstrap]' 'install_zsh = "maybe"' 'assume_yes = "yes"' 'terminals = "a"' 'nope = 1' \
+  '[ghostty]' 'font_size = "big"' 'keybinds = "windows"'
+settings_load "$F" 2>"$ERR"
+check "bad enum is ignored"        '[ -z "$(settings_get bootstrap.install_zsh)" ]'
+check "wrong type is ignored"      '[ -z "$(settings_get bootstrap.assume_yes)" ] && [ -z "$(settings_get bootstrap.terminals)" ]'
+check "unknown key is ignored"     '[ -z "$(settings_get bootstrap.nope)" ]'
+check "bad number is ignored"      '[ -z "$(settings_get ghostty.font_size)" ]'
+check "bad enum warns with the key" 'grep -q "invalid bootstrap.install_zsh value .maybe." "$ERR"'
+check "unknown key warns"          'grep -q "unknown key .nope. in \[bootstrap\]" "$ERR"'
+check "each rejected key warns once" '[ "$(grep -c "ignored" "$ERR")" = 6 ]'
+
+write '[bootstrap]' 'install_zsh = "no"' 'install_zsh = "yes"'
+settings_load "$F" 2>"$ERR"
+check "the last assignment wins" '[ "$(settings_get bootstrap.install_zsh)" = yes ]'
+
+settings_load "$WORK/missing.toml" 2>"$ERR"
+check "a missing file is not an error" '[ $? -eq 0 ] && [ -z "$(settings_get bootstrap.install_zsh)" ] && [ ! -s "$ERR" ]'
+check "the schema lists every key" '[ "$(settings_schema_keys | tr "\n" " ")" = "bootstrap.install_zsh bootstrap.assume_yes bootstrap.terminals ghostty.keybinds ghostty.font_family ghostty.font_size ghostty.background_opacity " ]'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
