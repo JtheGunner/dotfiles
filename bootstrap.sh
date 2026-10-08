@@ -708,7 +708,7 @@ _install_generated() {
 
 # the prefix a tmux.conf (FILE) sets, so the generated file can unbind it
 _tracked_tmux_prefix() {
-  awk '$1 == "set" && $2 == "-g" && $3 == "prefix" { print $4; exit }' "$1" 2>/dev/null || true
+  awk '($1 == "set" || $1 == "set-option") && $2 ~ /^-[a-zA-Z]*g[a-zA-Z]*$/ && $3 == "prefix" { print $4; exit }' "$1" 2>/dev/null || true
 }
 
 render_tmux_settings() {
