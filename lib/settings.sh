@@ -541,10 +541,10 @@ settings_migrate_legacy() {
 # tmux commands for the [tmux] values that are set, in a fixed order. A prefix
 # change unbinds the tracked default C-a first, so setting C-a itself still works.
 settings_render_tmux() {
-  local v
+  local v tracked="${1:-C-a}"
   v="$(settings_get tmux.prefix)"
   if [ -n "$v" ]; then
-    printf 'unbind C-a\nset -g prefix %s\nbind %s send-prefix\n' "$v" "$v"
+    printf 'unbind %s\nset -g prefix %s\nbind %s send-prefix\n' "$tracked" "$v" "$v"
   fi
   v="$(settings_get tmux.mouse)"
   case "$v" in

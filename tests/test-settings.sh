@@ -447,6 +447,13 @@ check "a number with a leading zero is rejected"     '[ -z "$(val ghostty font_s
 check "a float like 0.5 is still accepted"           '[ "$(val ghostty background_opacity 0.5)" = 0.5 ]'
 check "_settings_literal rejects a leading zero"     '! lit posint 0123 >/dev/null'
 
+echo ">> tmux unbind follows the tracked prefix"
+write '[tmux]' 'prefix = "C-b"'
+settings_load "$F" 2>/dev/null
+check "the default unbind is still C-a"              '[ "$(settings_render_tmux | head -1)" = "unbind C-a" ]'
+check "the tracked prefix can be passed in"          '[ "$(settings_render_tmux C-z | head -1)" = "unbind C-z" ]'
+check "the new prefix is set after the unbind"       '[ "$(settings_render_tmux C-z | sed -n 2,3p | tr "\n" "|")" = "set -g prefix C-b|bind C-b send-prefix|" ]'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

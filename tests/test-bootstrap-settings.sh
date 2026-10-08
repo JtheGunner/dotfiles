@@ -271,6 +271,18 @@ fresh; conf '[git]' 'user_email = "new@x.y"'
 sh_run '' 'render_git_settings'
 check "no warning without a local override"                      '! grep -q "also set in" "$WORK/err"'
 
+echo ">> tmux prefix follows the tracked config"
+printf 'set -g prefix C-z\nunbind C-b\n' > "$WORK/tracked.conf"
+fresh
+sh_run '' '_tracked_tmux_prefix "'"$WORK"'/tracked.conf"'
+check "the tracked prefix is read from the file"     '[ "$OUT" = C-z ]'
+sh_run '' '_tracked_tmux_prefix'
+check "the repo tmux.conf sets C-a"                  '[ "$OUT" = C-a ]'
+sh_run '' '_tracked_tmux_prefix /nonexistent'
+check "a missing file yields nothing and no error"   '[ -z "$OUT" ] && [ "$RC" = 0 ]'
+check "config.toml.example explains reloading"       'grep -q "old prefix" "$TEMPLATE"'
+check "the README explains reloading"                'grep -q "old prefix" "$DOTFILES/README.md"'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
