@@ -91,8 +91,8 @@ shown value, `-` unsets it, invalid answers are asked again), then opens
 `~/.config/dotfiles/config.toml` as a diff you confirm; comments and unknown
 content stay, and the previous file is kept as `config.toml.bak`. It needs a
 terminal and cannot be combined with `--yes`. The directory of the settings file
-must be writable, because the backup and the replacement file are created next to
-it. Answering `n` at the settings diff
+must be writable, because the replacement file is created next to it (behind a
+symlink: next to the file it points at) and the backup next to the link. Answering `n` at the settings diff
 ends the run before anything is installed. Answering `n` at the module diff ends
 the run there: the file stays as it was and the omnishell config is reset to it,
 but the tools installed so far remain.

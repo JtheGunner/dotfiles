@@ -206,6 +206,24 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 check "the README says the directory must be writable"          'grep -q "must be writable" "$DOTFILES/README.md"'
 
+echo ">> review fixes: a read-only target behind a symlink, a failed write at the module review"
+if [ "$(id -u)" -ne 0 ]; then
+  fresh; mkdir -p "$WORK/priv"; mv "$CONF" "$WORK/priv/config.toml"; ln -s "$WORK/priv/config.toml" "$CONF"
+  printf 'OLD\n' > "$CONF.bak"; chmod a-w "$WORK/priv"
+  ix_run "yes\n$(empties 19)y\n" 'interactive_settings'
+  chmod u+w "$WORK/priv"
+  check "the message names the directory of the real file"       '[ "$RC" = 1 ] && grep -qE "directory [^ ]*/priv must be writable" "$WORK/err"'
+  check "an existing backup survives a failed write"             '[ "$(cat "$CONF.bak")" = OLD ]'
+  check "and the real file is untouched"                         'cmp -s "$WORK/priv/config.toml" "$DOTFILES/config.toml.example"'
+
+  fresh; chmod a-w "$WORK/cfg"
+  printf 'printf "\\n[modules.testmod]\\nenabled = true\\n" >> "%s"\n' "$LIVE" > "$WORK/tui.sh"
+  ix_run "y\n" 'interactive_modules; echo not-reached'
+  chmod u+w "$WORK/cfg"
+  check "a failed write at the module review exits 1"            '[ "$RC" = 1 ] && ! grep -q not-reached <<< "$OUT"'
+  check "and resets the live omnishell config"                   '! grep -q testmod "$LIVE"'
+fi
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
