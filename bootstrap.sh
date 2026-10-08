@@ -708,7 +708,7 @@ _install_generated() {
 
 # the prefix a tmux.conf (FILE) sets, so the generated file can unbind it
 _tracked_tmux_prefix() {
-  awk '$1 == "set" && $2 == "-g" && $3 == "prefix" { print $4; exit }' "$1" 2>/dev/null || true
+  awk '($1 == "set" || $1 == "set-option") && $2 ~ /^-[a-zA-Z]*g[a-zA-Z]*$/ && $3 == "prefix" { print $4; exit }' "$1" 2>/dev/null || true
 }
 
 render_tmux_settings() {
@@ -1028,18 +1028,27 @@ _interactive_cleanup() {
   done <<< "$INTERACTIVE_TMPFILES"
 }
 
-# temp files go away on exit, end of input and Ctrl-C alike
+# a signal during a review undoes what the hook undoes, then leaves with the
+# signal's conventional exit code; the EXIT trap removes the temp files
+_interactive_abort() {
+  [ -z "$PROMPT_ABORT_HOOK" ] || "$PROMPT_ABORT_HOOK"
+  exit "$1"
+}
+
+# temp files go away on exit, end of input and signals alike
 _interactive_traps() {
   trap _interactive_cleanup EXIT
-  trap 'exit 130' INT TERM HUP
+  trap '_interactive_abort 130' INT
+  trap '_interactive_abort 143' TERM
+  trap '_interactive_abort 129' HUP
 }
 
 # NEW replaces the settings file: the first call of a run keeps the original as
 # .bak, the content goes in through a temp file next to the target and a rename,
 # so an interrupted write cannot leave half a file
-_write_settings_file() {
-  local staged target="$BOOTSTRAP_CONFIG" link hops=0
-  # a symlinked settings file stays a symlink: the rename happens next to the real file
+# the file the settings path finally points at (symlinks followed, at most 10 hops)
+_settings_target() {
+  local target="$BOOTSTRAP_CONFIG" link hops=0
   while [ -L "$target" ] && [ "$hops" -lt 10 ]; do
     link="$(readlink "$target")" || return 1
     case "$link" in
@@ -1048,11 +1057,20 @@ _write_settings_file() {
     esac
     hops=$((hops + 1))
   done
+  printf '%s\n' "$target"
+}
+
+_write_settings_file() {
+  local staged target
+  target="$(_settings_target)" || return 1
+  # the replacement file comes first: when its directory is read-only nothing
+  # (not even an older .bak) has been touched yet
+  staged="$(mktemp "$target.XXXXXX")" || return 1
+  INTERACTIVE_TMPFILES="${INTERACTIVE_TMPFILES}${staged}"$'\n'
   if [ -z "$BACKUP_MADE" ]; then
-    cp "$BOOTSTRAP_CONFIG" "$BOOTSTRAP_CONFIG.bak" || return 1
+    cp "$BOOTSTRAP_CONFIG" "$BOOTSTRAP_CONFIG.bak" || { rm -f "$staged"; return 1; }
     BACKUP_MADE=1
   fi
-  staged="$(mktemp "$target.XXXXXX")" || return 1
   if cp -p "$target" "$staged" && cat "$1" > "$staged" && mv -f "$staged" "$target"; then
     return 0
   fi
@@ -1113,8 +1131,8 @@ _review_and_install() {
   _prompt_line "Write these changes to $BOOTSTRAP_CONFIG? [y/N] "
   case "$REPLY" in y | Y | yes | YES) ;; *) return 1 ;; esac
   _write_settings_file "$new" || {
-    warn "cannot write $BOOTSTRAP_CONFIG"
-    exit 1
+    warn "cannot write $BOOTSTRAP_CONFIG (the directory $(dirname "$(_settings_target)") must be writable: the replacement file is created there, the backup next to $BOOTSTRAP_CONFIG)"
+    _interactive_abort 1
   }
 }
 
