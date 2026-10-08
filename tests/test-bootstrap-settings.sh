@@ -310,6 +310,26 @@ fresh; conf '[git]' 'signing_key = "~/.ssh/missing.pub"' 'editor = "nvim"'
 sh_run '' 'render_git_settings'
 check "with another value the file is still written"     '[ "$(gitc core.editor)" = nvim ]'
 
+echo ">> tracked prefix spellings"
+fresh
+tp() { printf '%s\n' "$@" > "$WORK/tp.conf"; sh_run '' '_tracked_tmux_prefix "'"$WORK"'/tp.conf"'; }
+tp 'set -g prefix C-a'
+check "set -g prefix"                              '[ "$OUT" = C-a ]'
+tp 'set-option -g prefix C-x'
+check "set-option -g prefix"                       '[ "$OUT" = C-x ]'
+tp 'set -sg prefix M-a'
+check "set -sg prefix"                             '[ "$OUT" = M-a ]'
+tp 'set -gq prefix C-y'
+check "set -gq prefix"                             '[ "$OUT" = C-y ]'
+tp '# set -g prefix C-q' 'set -g prefix C-w'
+check "a commented line is ignored"                '[ "$OUT" = C-w ]'
+tp 'set -g prefix2 C-b'
+check "prefix2 is not the prefix"                  '[ -z "$OUT" ]'
+tp 'set -s prefix C-z'
+check "a flag without g is not matched"            '[ -z "$OUT" ]'
+tp 'bind prefix C-u'
+check "other commands are not matched"             '[ -z "$OUT" ]'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

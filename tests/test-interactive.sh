@@ -175,6 +175,59 @@ check "the content went to the file it points at"               'grep -qx "insta
 check "no staging file is left next to the target"              '[ "$(ls "$WORK/priv" | tr "\n" " ")" = "config.toml " ]'
 check "the backup sits next to the link"                        'cmp -s "$CONF.bak" "$DOTFILES/config.toml.example"' 
 
+echo ">> signals: abort hook, exit codes, cleanup"
+sig_case() {   # <signal> <expected exit code>: the signal arrives while a module review is open
+  fresh
+  ix_run "" 'prepare_omnishell_config; _interactive_traps; _interactive_mktemp t; : > "$t"
+    printf "\n[modules.testmod]\nenabled = true\n" >> "$HOME/.config/omnishell/config.toml"
+    PROMPT_ABORT_HOOK=_write_omnishell_config; kill -'"$1"' $$; echo not-reached'
+  check "$1 exits with $2"                                  "[ \"\$RC\" = $2 ]"
+  check "$1 does not let the run continue"                  '! grep -q not-reached <<< "$OUT"'
+  check "$1 removes the temp files"                         '[ -z "$(ls -A "$WORK/tmp")" ]'
+  check "$1 resets the live omnishell config"               '! grep -q testmod "$LIVE"'
+}
+sig_case INT 130
+sig_case TERM 143
+sig_case HUP 129
+fresh
+ix_run "" '_write_settings_file "$BOOTSTRAP_CONFIG"; printf %s "$INTERACTIVE_TMPFILES"'
+check "the staging file is registered for cleanup"          'grep -q "config.toml\." <<< "$OUT"'
+fresh
+# only our own traps count: a runner may start the shell with SIGPIPE ignored, which `trap -p` also lists;
+# the output goes to a file because bash 3.2 does not show the traps inside a pipeline
+ix_run "" 'INTERACTIVE_FLAG=; interactive_settings; interactive_modules; trap -p EXIT INT TERM HUP > "$HOME/traps"; grep -c _interactive "$HOME/traps" || true'
+check "a run without --interactive installs no trap"        '[ "$OUT" = 0 ]'
+ix_run "" '_interactive_traps; trap -p EXIT INT TERM HUP > "$HOME/traps"; grep -c _interactive "$HOME/traps" || true'
+check "the same probe sees the four traps once they are set" '[ "$OUT" = 4 ]'
+
+echo ">> a settings directory that is not writable"
+if [ "$(id -u)" -ne 0 ]; then
+  fresh; chmod a-w "$WORK/cfg"
+  ix_run "yes\n$(empties 19)y\n" 'interactive_settings'
+  chmod u+w "$WORK/cfg"
+  check "the write fails and the message names the directory"   '[ "$RC" = 1 ] && grep -q "must be writable" "$WORK/err" && grep -qF "$WORK/cfg" "$WORK/err"'
+  check "the settings file is untouched"                        'cmp -s "$CONF" "$DOTFILES/config.toml.example"'
+fi
+check "the README says the directory must be writable"          'grep -q "must be writable" "$DOTFILES/README.md"'
+
+echo ">> review fixes: a read-only target behind a symlink, a failed write at the module review"
+if [ "$(id -u)" -ne 0 ]; then
+  fresh; mkdir -p "$WORK/priv"; mv "$CONF" "$WORK/priv/config.toml"; ln -s "$WORK/priv/config.toml" "$CONF"
+  printf 'OLD\n' > "$CONF.bak"; chmod a-w "$WORK/priv"
+  ix_run "yes\n$(empties 19)y\n" 'interactive_settings'
+  chmod u+w "$WORK/priv"
+  check "the message names the directory of the real file"       '[ "$RC" = 1 ] && grep -qE "directory [^ ]*/priv must be writable" "$WORK/err"'
+  check "an existing backup survives a failed write"             '[ "$(cat "$CONF.bak")" = OLD ]'
+  check "and the real file is untouched"                         'cmp -s "$WORK/priv/config.toml" "$DOTFILES/config.toml.example"'
+
+  fresh; chmod a-w "$WORK/cfg"
+  printf 'printf "\\n[modules.testmod]\\nenabled = true\\n" >> "%s"\n' "$LIVE" > "$WORK/tui.sh"
+  ix_run "y\n" 'interactive_modules; echo not-reached'
+  chmod u+w "$WORK/cfg"
+  check "a failed write at the module review exits 1"            '[ "$RC" = 1 ] && ! grep -q not-reached <<< "$OUT"'
+  check "and resets the live omnishell config"                   '! grep -q testmod "$LIVE"'
+fi
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
