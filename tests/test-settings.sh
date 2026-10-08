@@ -436,6 +436,17 @@ printf '%s\n' '[modules.eza]' 'enabled = true' > "$LIVE"
 write '[git]' 'editor = "vi"'
 check "turning one on still sets it"                          '[ "$(settings_omnishell_changes "$LIVE" "$DEF" "$F")" = "set modules.eza" ]' 
 
+echo ">> integer rules"
+check "history_limit accepts nine digits"            '[ "$(val tmux history_limit 999999999)" = 999999999 ]'
+check "history_limit rejects ten digits"             '[ -z "$(val tmux history_limit 1000000000)" ]'
+check "base_index rejects ten digits"                '[ -z "$(val tmux base_index 1000000000)" ]'
+check "base_index rejects a leading zero"            '[ -z "$(val tmux base_index 007)" ]'
+check "base_index still accepts 0"                   '[ "$(val tmux base_index 0)" = 0 ]'
+check "escape_time rejects a leading zero"           '[ -z "$(val tmux escape_time 010)" ]'
+check "a number with a leading zero is rejected"     '[ -z "$(val ghostty font_size 012)" ]'
+check "a float like 0.5 is still accepted"           '[ "$(val ghostty background_opacity 0.5)" = 0.5 ]'
+check "_settings_literal rejects a leading zero"     '! lit posint 0123 >/dev/null'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

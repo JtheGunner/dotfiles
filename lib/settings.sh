@@ -138,6 +138,10 @@ _settings_type() { printf '%s\n' "$SETTINGS_SCHEMA" | awk -v k="$1" '$1 == k { p
 
 # _settings_value_ok TYPE KIND VALUE
 _settings_value_ok() {
+  # TOML forbids leading zeros, and in shell arithmetic 007 would be octal
+  if [ "$2" = int ]; then
+    case "$3" in 0[0-9]* | -0[0-9]*) return 1 ;; esac
+  fi
   case "$1" in
     enum:*) [ "$2" = str ] || return 1
             case "$3" in "" | *,*) return 1 ;; esac
@@ -149,8 +153,8 @@ _settings_value_ok() {
     number) [ "$2" = int ] || [ "$2" = float ] ;;
     positive) { [ "$2" = int ] || [ "$2" = float ]; } && awk -v v="$3" 'BEGIN { exit !(v > 0) }' ;;
     fraction) { [ "$2" = int ] || [ "$2" = float ]; } && awk -v v="$3" 'BEGIN { exit !(v >= 0 && v <= 1) }' ;;
-    nonneg) [ "$2" = int ] && [ "$3" -ge 0 ] ;;
-    posint) [ "$2" = int ] && [ "$3" -gt 0 ] ;;
+    nonneg) [ "$2" = int ] && [ "${#3}" -le 9 ] && [ "$3" -ge 0 ] ;;
+    posint) [ "$2" = int ] && [ "${#3}" -le 9 ] && [ "$3" -gt 0 ] ;;
     tmuxkey) [ "$2" = str ] || return 1
              case "$3" in
                C-[A-Za-z0-9] | M-[A-Za-z0-9] | C-Space | M-Space | F[1-9] | F1[0-2]) return 0 ;;
