@@ -1123,7 +1123,7 @@ _review_and_install() {
   _prompt_line "Write these changes to $BOOTSTRAP_CONFIG? [y/N] "
   case "$REPLY" in y | Y | yes | YES) ;; *) return 1 ;; esac
   _write_settings_file "$new" || {
-    warn "cannot write $BOOTSTRAP_CONFIG"
+    warn "cannot write $BOOTSTRAP_CONFIG (its directory $(dirname "$BOOTSTRAP_CONFIG") must be writable: the backup and the replacement file are created there)"
     exit 1
   }
 }

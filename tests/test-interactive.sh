@@ -196,6 +196,16 @@ fresh
 ix_run "" 'INTERACTIVE_FLAG=; interactive_settings; interactive_modules; trap -p; echo END'
 check "a run without --interactive installs no trap"        '[ "$OUT" = END ]'
 
+echo ">> a settings directory that is not writable"
+if [ "$(id -u)" -ne 0 ]; then
+  fresh; chmod a-w "$WORK/cfg"
+  ix_run "yes\n$(empties 19)y\n" 'interactive_settings'
+  chmod u+w "$WORK/cfg"
+  check "the write fails and the message names the directory"   '[ "$RC" = 1 ] && grep -q "must be writable" "$WORK/err" && grep -qF "$WORK/cfg" "$WORK/err"'
+  check "the settings file is untouched"                        'cmp -s "$CONF" "$DOTFILES/config.toml.example"'
+fi
+check "the README says the directory must be writable"          'grep -q "must be writable" "$DOTFILES/README.md"'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
