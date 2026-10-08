@@ -436,6 +436,66 @@ printf '%s\n' '[modules.eza]' 'enabled = true' > "$LIVE"
 write '[git]' 'editor = "vi"'
 check "turning one on still sets it"                          '[ "$(settings_omnishell_changes "$LIVE" "$DEF" "$F")" = "set modules.eza" ]' 
 
+echo ">> integer rules"
+check "history_limit accepts nine digits"            '[ "$(val tmux history_limit 999999999)" = 999999999 ]'
+check "history_limit rejects ten digits"             '[ -z "$(val tmux history_limit 1000000000)" ]'
+check "base_index rejects ten digits"                '[ -z "$(val tmux base_index 1000000000)" ]'
+check "base_index rejects a leading zero"            '[ -z "$(val tmux base_index 007)" ]'
+check "base_index still accepts 0"                   '[ "$(val tmux base_index 0)" = 0 ]'
+check "escape_time rejects a leading zero"           '[ -z "$(val tmux escape_time 010)" ]'
+check "a number with a leading zero is rejected"     '[ -z "$(val ghostty font_size 012)" ]'
+check "a float like 0.5 is still accepted"           '[ "$(val ghostty background_opacity 0.5)" = 0.5 ]'
+check "_settings_literal rejects a leading zero"     '! lit posint 0123 >/dev/null'
+
+echo ">> tmux unbind follows the tracked prefix"
+write '[tmux]' 'prefix = "C-b"'
+settings_load "$F" 2>/dev/null
+check "the default unbind is still C-a"              '[ "$(settings_render_tmux | head -1)" = "unbind C-a" ]'
+check "the tracked prefix can be passed in"          '[ "$(settings_render_tmux C-z | head -1)" = "unbind C-z" ]'
+check "the new prefix is set after the unbind"       '[ "$(settings_render_tmux C-z | sed -n 2,3p | tr "\n" "|")" = "set -g prefix C-b|bind C-b send-prefix|" ]'
+
+echo ">> writers: duplicates, CRLF, headers, empty files"
+CR="$(printf '\r')"
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.tmux]' 'enabled = true' > "$DEF"
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.tmux]' 'enabled = false' > "$LIVE"
+write '[modules.tmux]' 'enabled = true' 'enabled = false'
+check "a repeated key in the override counts by its last value" '[ -z "$(settings_omnishell_changes "$LIVE" "$DEF" "$F")" ]'
+
+printf '[tmux]\r\nmouse = false\r\nprefix = "C-a"\r\n' > "$F"
+cp "$F" "$WORK/crlf.orig"
+check "a CRLF file without changes is printed byte-identical"   'settings_update_file "$F" "" | cmp -s - "$WORK/crlf.orig"'
+OUT="$(settings_update_file "$F" "$(chg tmux mouse true; chg tmux mode_keys '"vi"'; chg git editor '"nvim"')")"
+check "every line of an updated CRLF file ends with CR"         '[ "$(grep -c "${CR}\$" <<< "$OUT")" = "$(grep -c "" <<< "$OUT")" ]'
+check "the replaced value is there"                             'grep -q "^mouse = true" <<< "$OUT"'
+
+write '[ bootstrap ]' 'assume_yes = false'
+OUT="$(settings_update_file "$F" "$(chg bootstrap assume_yes true)")"
+printf '%s\n' "$OUT" > "$WORK/hdr.toml"
+settings_load "$WORK/hdr.toml" 2>/dev/null
+check "a header the parser rejects is not taken for the table"  '[ "$(settings_get bootstrap.assume_yes)" = true ]'
+
+: > "$F"
+OUT="$(settings_update_file "$F" "$(chg ghostty font_size 14; chg tmux mouse true)")"
+check "an empty file gets no leading blank line"                '[ "$(sed -n 1p <<< "$OUT")" = "[ghostty]" ]'
+check "a second new table is still separated by a blank line"   '[ "$(sed -n 3p <<< "$OUT")" = "" ] && [ "$(sed -n 4p <<< "$OUT")" = "[tmux]" ]'
+printf '%s\n' '[omnishell]' 'x = 1' > "$DEF"
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.broot]' 'enabled = true' '' '[modules.eza]' 'enabled = true' > "$LIVE"
+OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
+check "omnishell tables in an empty file: no leading blank line" '[ "$(sed -n 1p <<< "$OUT")" = "[modules.broot]" ]'
+check "and the second table is separated"                       'grep -qx "\[modules.eza\]" <<< "$OUT" && [ "$(sed -n 3p <<< "$OUT")" = "" ]'
+
+echo ">> review fixes: lines that look like headers but are not accepted ones"
+printf '%s\n' '[modules.tmux]' 'enabled = true' > "$DEF"
+cp "$DEF" "$LIVE"
+write '[bootstrap]' 'assume_yes = false' '' '[modules.tmux]' 'enabled = false' '[modules.zoxide ]' 'enabled = true' '[[modules.list]]' 'foo = 1' '[git]' 'editor = "vim"'
+OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
+check "the dropped table is gone"                                '! grep -q "enabled = false" <<< "$OUT"'
+check "a header-like line after it ends the skipping"            'grep -qx "\[modules.zoxide \]" <<< "$OUT" && grep -qx "\[\[modules.list\]\]" <<< "$OUT" && grep -qx "foo = 1" <<< "$OUT"'
+check "and the tables after it stay"                             'grep -qx "\[git\]" <<< "$OUT" && grep -qx "editor = \"vim\"" <<< "$OUT"'
+write '[tmux]' 'mouse = false' '[ tmux ]' 'mouse = true'
+OUT="$(settings_update_file "$F" "$(chg tmux mouse true)")"
+check "keys under a rejected header are not taken for the table" '[ "$(grep -c "^mouse" <<< "$OUT")" = 2 ] && grep -qx "\[ tmux \]" <<< "$OUT"' 
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
