@@ -225,6 +225,8 @@ settings_update_file() {
       if (line !~ /^[ \t]*[A-Za-z0-9_-]+[ \t]*=/) return ""
       k = line; sub(/^[ \t]*/, "", k); sub(/[ \t]*=.*$/, "", k); return k
     }
+    # any line starting with "[" ends the previous table; only a header the parser accepts names one
+    function bracket(line) { return line ~ /^[ \t]*\[/ }
     # lines this script writes end like the file does
     function out(s) { printf "%s%s\n", s, cr }
     BEGIN {
@@ -240,6 +242,7 @@ settings_update_file() {
       lines++
       if (FNR == 1 && $0 ~ /\r$/) cr = "\r"
       if (header($0)) { t = tname($0); known[t] = 1 }
+      else if (bracket($0)) t = ""
       else if ((k = keyof($0)) != "") active[t, k] = 1
       next
     }
@@ -252,6 +255,7 @@ settings_update_file() {
         }
       next
     }
+    bracket($0) { t = ""; print; next }
     (k = keyof($0)) != "" && ((t, k) in want) {
       i = want[t, k]
       if (!(i in done)) { if (cl[i] != "") out(k " = " cl[i]); done[i] = 1 }
@@ -452,6 +456,7 @@ settings_update_omnishell() {
   OVR="$blocks" DROP="$drops" awk '
     function blank_or_comment(s) { return s ~ /^[ \t]*(#.*)?$/ }
     function header(line) { return line ~ /^[ \t]*\[[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*\][ \t\r]*(#.*)?$/ }
+    function bracket(line) { return line ~ /^[ \t]*\[/ }
     function tname(line,   n) { n = line; sub(/^[ \t]*\[/, "", n); sub(/\].*$/, "", n); gsub(/^[ \t]+|[ \t]+$/, "", n); return n }
     BEGIN {
       n = split(ENVIRON["OVR"], ol, "\n"); cur = ""
@@ -471,6 +476,7 @@ settings_update_omnishell() {
       if (name in drop) { skipping = 1; next }
       print; next
     }
+    bracket($0) { printf "%s", pend; pend = ""; skipping = 0; print; next }
     skipping { if (blank_or_comment($0)) pend = pend $0 "\n"; else pend = ""; next }
     { print }
     END {

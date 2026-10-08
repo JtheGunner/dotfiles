@@ -484,6 +484,18 @@ OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
 check "omnishell tables in an empty file: no leading blank line" '[ "$(sed -n 1p <<< "$OUT")" = "[modules.broot]" ]'
 check "and the second table is separated"                       'grep -qx "\[modules.eza\]" <<< "$OUT" && [ "$(sed -n 3p <<< "$OUT")" = "" ]'
 
+echo ">> review fixes: lines that look like headers but are not accepted ones"
+printf '%s\n' '[modules.tmux]' 'enabled = true' > "$DEF"
+cp "$DEF" "$LIVE"
+write '[bootstrap]' 'assume_yes = false' '' '[modules.tmux]' 'enabled = false' '[modules.zoxide ]' 'enabled = true' '[[modules.list]]' 'foo = 1' '[git]' 'editor = "vim"'
+OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
+check "the dropped table is gone"                                '! grep -q "enabled = false" <<< "$OUT"'
+check "a header-like line after it ends the skipping"            'grep -qx "\[modules.zoxide \]" <<< "$OUT" && grep -qx "\[\[modules.list\]\]" <<< "$OUT" && grep -qx "foo = 1" <<< "$OUT"'
+check "and the tables after it stay"                             'grep -qx "\[git\]" <<< "$OUT" && grep -qx "editor = \"vim\"" <<< "$OUT"'
+write '[tmux]' 'mouse = false' '[ tmux ]' 'mouse = true'
+OUT="$(settings_update_file "$F" "$(chg tmux mouse true)")"
+check "keys under a rejected header are not taken for the table" '[ "$(grep -c "^mouse" <<< "$OUT")" = 2 ] && grep -qx "\[ tmux \]" <<< "$OUT"' 
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

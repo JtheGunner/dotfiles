@@ -166,6 +166,15 @@ ix_run "yes\n$(empties 19)y\ny\n" 'interactive_settings; interactive_modules'
 check "both steps write: both changes are in the file"          'grep -qx "install_zsh = \"yes\"" "$CONF" && grep -qx "\[modules.testmod\]" "$CONF"'
 check "and the .bak still holds the original"                   'cmp -s "$CONF.bak" "$DOTFILES/config.toml.example"'
 
+echo ">> review fixes: a symlinked settings file"
+fresh
+mkdir -p "$WORK/priv"; mv "$CONF" "$WORK/priv/config.toml"; ln -s "$WORK/priv/config.toml" "$CONF"
+ix_run "yes\n$(empties 19)y\n" 'interactive_settings'
+check "the symlink is still a symlink"                          '[ -L "$CONF" ]'
+check "the content went to the file it points at"               'grep -qx "install_zsh = \"yes\"" "$WORK/priv/config.toml"'
+check "no staging file is left next to the target"              '[ "$(ls "$WORK/priv" | tr "\n" " ")" = "config.toml " ]'
+check "the backup sits next to the link"                        'cmp -s "$CONF.bak" "$DOTFILES/config.toml.example"' 
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

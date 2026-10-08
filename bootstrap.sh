@@ -1038,13 +1038,22 @@ _interactive_traps() {
 # .bak, the content goes in through a temp file next to the target and a rename,
 # so an interrupted write cannot leave half a file
 _write_settings_file() {
-  local staged
+  local staged target="$BOOTSTRAP_CONFIG" link hops=0
+  # a symlinked settings file stays a symlink: the rename happens next to the real file
+  while [ -L "$target" ] && [ "$hops" -lt 10 ]; do
+    link="$(readlink "$target")" || return 1
+    case "$link" in
+      /*) target="$link" ;;
+      *) target="$(dirname "$target")/$link" ;;
+    esac
+    hops=$((hops + 1))
+  done
   if [ -z "$BACKUP_MADE" ]; then
     cp "$BOOTSTRAP_CONFIG" "$BOOTSTRAP_CONFIG.bak" || return 1
     BACKUP_MADE=1
   fi
-  staged="$(mktemp "$BOOTSTRAP_CONFIG.XXXXXX")" || return 1
-  if cp -p "$BOOTSTRAP_CONFIG" "$staged" && cat "$1" > "$staged" && mv -f "$staged" "$BOOTSTRAP_CONFIG"; then
+  staged="$(mktemp "$target.XXXXXX")" || return 1
+  if cp -p "$target" "$staged" && cat "$1" > "$staged" && mv -f "$staged" "$target"; then
     return 0
   fi
   rm -f "$staged"
