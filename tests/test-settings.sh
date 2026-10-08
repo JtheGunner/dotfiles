@@ -454,6 +454,36 @@ check "the default unbind is still C-a"              '[ "$(settings_render_tmux 
 check "the tracked prefix can be passed in"          '[ "$(settings_render_tmux C-z | head -1)" = "unbind C-z" ]'
 check "the new prefix is set after the unbind"       '[ "$(settings_render_tmux C-z | sed -n 2,3p | tr "\n" "|")" = "set -g prefix C-b|bind C-b send-prefix|" ]'
 
+echo ">> writers: duplicates, CRLF, headers, empty files"
+CR="$(printf '\r')"
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.tmux]' 'enabled = true' > "$DEF"
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.tmux]' 'enabled = false' > "$LIVE"
+write '[modules.tmux]' 'enabled = true' 'enabled = false'
+check "a repeated key in the override counts by its last value" '[ -z "$(settings_omnishell_changes "$LIVE" "$DEF" "$F")" ]'
+
+printf '[tmux]\r\nmouse = false\r\nprefix = "C-a"\r\n' > "$F"
+cp "$F" "$WORK/crlf.orig"
+check "a CRLF file without changes is printed byte-identical"   'settings_update_file "$F" "" | cmp -s - "$WORK/crlf.orig"'
+OUT="$(settings_update_file "$F" "$(chg tmux mouse true; chg tmux mode_keys '"vi"'; chg git editor '"nvim"')")"
+check "every line of an updated CRLF file ends with CR"         '[ "$(grep -c "${CR}\$" <<< "$OUT")" = "$(grep -c "" <<< "$OUT")" ]'
+check "the replaced value is there"                             'grep -q "^mouse = true" <<< "$OUT"'
+
+write '[ bootstrap ]' 'assume_yes = false'
+OUT="$(settings_update_file "$F" "$(chg bootstrap assume_yes true)")"
+printf '%s\n' "$OUT" > "$WORK/hdr.toml"
+settings_load "$WORK/hdr.toml" 2>/dev/null
+check "a header the parser rejects is not taken for the table"  '[ "$(settings_get bootstrap.assume_yes)" = true ]'
+
+: > "$F"
+OUT="$(settings_update_file "$F" "$(chg ghostty font_size 14; chg tmux mouse true)")"
+check "an empty file gets no leading blank line"                '[ "$(sed -n 1p <<< "$OUT")" = "[ghostty]" ]'
+check "a second new table is still separated by a blank line"   '[ "$(sed -n 3p <<< "$OUT")" = "" ] && [ "$(sed -n 4p <<< "$OUT")" = "[tmux]" ]'
+printf '%s\n' '[omnishell]' 'x = 1' > "$DEF"
+printf '%s\n' '[omnishell]' 'x = 1' '' '[modules.broot]' 'enabled = true' '' '[modules.eza]' 'enabled = true' > "$LIVE"
+OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
+check "omnishell tables in an empty file: no leading blank line" '[ "$(sed -n 1p <<< "$OUT")" = "[modules.broot]" ]'
+check "and the second table is separated"                       'grep -qx "\[modules.eza\]" <<< "$OUT" && [ "$(sed -n 3p <<< "$OUT")" = "" ]'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

@@ -219,14 +219,16 @@ _settings_literal() {
 settings_update_file() {
   CHG="$2" awk -v us="$SETTINGS_US" '
     function trim(s) { sub(/^[ \t\r]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
-    function header(line) { return line ~ /^[ \t]*\[[^\[].*\]/ }
+    function header(line) { return line ~ /^[ \t]*\[[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*\][ \t\r]*(#.*)?$/ }
     function tname(line,   n) { n = line; sub(/^[ \t]*\[/, "", n); sub(/\].*$/, "", n); return trim(n) }
     function keyof(line,   k) {
       if (line !~ /^[ \t]*[A-Za-z0-9_-]+[ \t]*=/) return ""
       k = line; sub(/^[ \t]*/, "", k); sub(/[ \t]*=.*$/, "", k); return k
     }
+    # lines this script writes end like the file does
+    function out(s) { printf "%s%s\n", s, cr }
     BEGIN {
-      n = split(ENVIRON["CHG"], rows, "\n"); nc = 0
+      n = split(ENVIRON["CHG"], rows, "\n"); nc = 0; cr = ""; nt = 0
       for (i = 1; i <= n; i++) {
         if (rows[i] == "") continue
         split(rows[i], f, us)
@@ -235,6 +237,8 @@ settings_update_file() {
       }
     }
     FNR == NR {
+      lines++
+      if (FNR == 1 && $0 ~ /\r$/) cr = "\r"
       if (header($0)) { t = tname($0); known[t] = 1 }
       else if ((k = keyof($0)) != "") active[t, k] = 1
       next
@@ -244,21 +248,22 @@ settings_update_file() {
       t = tname($0); print
       for (i = 1; i <= nc; i++)
         if (ct[i] == t && cl[i] != "" && !((t, ck[i]) in active) && !(i in done)) {
-          print ck[i] " = " cl[i]; done[i] = 1
+          out(ck[i] " = " cl[i]); done[i] = 1
         }
       next
     }
     (k = keyof($0)) != "" && ((t, k) in want) {
       i = want[t, k]
-      if (!(i in done)) { if (cl[i] != "") print k " = " cl[i]; done[i] = 1 }
+      if (!(i in done)) { if (cl[i] != "") out(k " = " cl[i]); done[i] = 1 }
       next
     }
     { print }
     END {
       for (i = 1; i <= nc; i++) {
         if (cl[i] == "" || (ct[i] in known) || (ct[i] in tdone)) continue
-        print ""; print "[" ct[i] "]"; tdone[ct[i]] = 1
-        for (j = i; j <= nc; j++) if (ct[j] == ct[i] && cl[j] != "") print ck[j] " = " cl[j]
+        if (lines > 0 || nt > 0) out("")
+        out("[" ct[i] "]"); tdone[ct[i]] = 1; nt++
+        for (j = i; j <= nc; j++) if (ct[j] == ct[i] && cl[j] != "") out(ck[j] " = " cl[j])
       }
     }
   ' "$1" "$1"
@@ -388,7 +393,9 @@ settings_merge_omnishell() {
 
 # sorted records of one table of FILE
 _settings_table_records() {
-  settings_parse "$1" 2>/dev/null | awk -F"$SETTINGS_US" -v t="$2" '$1 == t' | sort
+  settings_parse "$1" 2>/dev/null | awk -F"$SETTINGS_US" -v t="$2" '
+    $1 == t { if (!($2 in seen)) { seen[$2] = 1; order[++n] = $2 } rec[$2] = $0 }
+    END { for (i = 1; i <= n; i++) print rec[order[i]] }' | sort
 }
 
 # tables of FILE that have a line settings_parse rejects (one name per line)
@@ -444,7 +451,7 @@ settings_update_omnishell() {
   SETTINGS_RECORDS="$saved"
   OVR="$blocks" DROP="$drops" awk '
     function blank_or_comment(s) { return s ~ /^[ \t]*(#.*)?$/ }
-    function header(line) { return line ~ /^[ \t]*\[[^\[].*\]/ }
+    function header(line) { return line ~ /^[ \t]*\[[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*\][ \t\r]*(#.*)?$/ }
     function tname(line,   n) { n = line; sub(/^[ \t]*\[/, "", n); sub(/\].*$/, "", n); gsub(/^[ \t]+|[ \t]+$/, "", n); return n }
     BEGIN {
       n = split(ENVIRON["OVR"], ol, "\n"); cur = ""
@@ -468,7 +475,8 @@ settings_update_omnishell() {
     { print }
     END {
       printf "%s", pend
-      for (i = 1; i <= no; i++) if (!(oorder[i] in used)) printf "\n%s", otext[oorder[i]]
+      sep = (NR > 0) ? "\n" : ""
+      for (i = 1; i <= no; i++) if (!(oorder[i] in used)) { printf "%s%s", sep, otext[oorder[i]]; sep = "\n" }
     }
   ' "$file"
 }

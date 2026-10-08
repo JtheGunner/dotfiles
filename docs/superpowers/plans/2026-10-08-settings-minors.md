@@ -444,9 +444,11 @@ s = s[:m.start()] + new_fn + s[m.end():]
 
 # 4. settings_update_omnishell: no leading blank line in an empty file
 old = '''      for (i = 1; i <= no; i++) if (!(oorder[i] in used)) printf "\\n%s", otext[oorder[i]]'''
-assert s.count(old) == 1
-s = s.replace(old, '''      sep = (NR > 0) ? "\\n" : ""
-      for (i = 1; i <= no; i++) if (!(oorder[i] in used)) { printf "%s%s", sep, otext[oorder[i]]; sep = "\\n" }''')
+# the same END line also closes settings_merge_omnishell; only the last one (settings_update_omnishell) changes
+assert s.count(old) == 2
+i = s.rindex(old)
+s = s[:i] + '''      sep = (NR > 0) ? "\\n" : ""
+      for (i = 1; i <= no; i++) if (!(oorder[i] in used)) { printf "%s%s", sep, otext[oorder[i]]; sep = "\\n" }''' + s[i + len(old):]
 open(p, 'w').write(s)
 ```
 
