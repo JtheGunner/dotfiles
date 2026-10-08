@@ -50,7 +50,8 @@
 # Written to ~/.config/tmux-settings.conf, which ~/.tmux.conf loads before your own
 # ~/.tmux.conf.local. An unset key keeps the default from the tracked tmux config.
 #
-# Prefix key: C-a style, M-x, C-Space or F1 to F12. Default C-a.
+# Prefix key: C-a style, M-x, C-Space or F1 to F12. Default C-a. A running tmux
+# picks a changed prefix up after "old prefix" + r (reload) or a server restart.
 #prefix = "C-a"
 # Mouse support on or off. Default on.
 #mouse = true
