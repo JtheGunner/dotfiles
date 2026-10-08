@@ -496,6 +496,24 @@ write '[tmux]' 'mouse = false' '[ tmux ]' 'mouse = true'
 OUT="$(settings_update_file "$F" "$(chg tmux mouse true)")"
 check "keys under a rejected header are not taken for the table" '[ "$(grep -c "^mouse" <<< "$OUT")" = 2 ] && grep -qx "\[ tmux \]" <<< "$OUT"' 
 
+echo ">> writers: BOM, and CRLF in the omnishell writer"
+BOM="$(printf '\357\273\277')"
+printf '%s[bootstrap]\nassume_yes = false\n' "$BOM" > "$F"
+OUT="$(settings_update_file "$F" "$(chg bootstrap assume_yes true)")"
+check "settings_update_file keeps a BOM first"                   '[ "$(printf %s "$OUT" | head -c 3)" = "$BOM" ]'
+check "and edits the table in place, without a second one"       '[ "$(grep -c "bootstrap\]" <<< "$OUT")" = 1 ] && grep -qx "assume_yes = true" <<< "$OUT"'
+printf '%s[bootstrap]\nassume_yes = false\n' "$BOM" > "$F"
+check "a BOM file without changes is printed byte-identical"     'settings_update_file "$F" "" | cmp -s - "$F"'
+
+printf '%s\n' '[modules.tmux]' 'enabled = false' > "$DEF"
+printf '%s\n' '[modules.tmux]' 'enabled = true' '' '[modules.broot]' 'enabled = true' > "$LIVE"
+printf '%s[bootstrap]\r\nassume_yes = false\r\n\r\n[modules.tmux]\r\nenabled = false\r\n' "$BOM" > "$F"
+OUT="$(settings_update_omnishell "$F" "$LIVE" "$DEF")"
+check "settings_update_omnishell keeps a BOM first"              '[ "$(printf %s "$OUT" | head -c 3)" = "$BOM" ]'
+check "the replaced and the appended table use the file CR"      '[ "$(grep -c "${CR}\$" <<< "$OUT")" = "$(grep -c "" <<< "$OUT")" ]'
+check "the new values are there"                                 'grep -q "^enabled = true" <<< "$OUT" && grep -q "\[modules.broot\]" <<< "$OUT"'
+check "no second tmux table appears"                             '[ "$(grep -c "modules.tmux\]" <<< "$OUT")" = 1 ]'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

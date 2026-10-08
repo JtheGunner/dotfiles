@@ -227,10 +227,12 @@ settings_update_file() {
     }
     # any line starting with "[" ends the previous table; only a header the parser accepts names one
     function bracket(line) { return line ~ /^[ \t]*\[/ }
+    # all output goes through emit(); the BOM of the file is printed once, first
+    function emit(s) { printf "%s%s", pre, s; pre = "" }
     # lines this script writes end like the file does
-    function out(s) { printf "%s%s\n", s, cr }
+    function out(s) { emit(s cr "\n") }
     BEGIN {
-      n = split(ENVIRON["CHG"], rows, "\n"); nc = 0; cr = ""; nt = 0
+      n = split(ENVIRON["CHG"], rows, "\n"); nc = 0; cr = ""; nt = 0; pre = ""; bom = "\357\273\277"
       for (i = 1; i <= n; i++) {
         if (rows[i] == "") continue
         split(rows[i], f, us)
@@ -239,6 +241,7 @@ settings_update_file() {
       }
     }
     FNR == NR {
+      if (FNR == 1 && substr($0, 1, length(bom)) == bom) $0 = substr($0, length(bom) + 1)
       lines++
       if (FNR == 1 && $0 ~ /\r$/) cr = "\r"
       if (header($0)) { t = tname($0); known[t] = 1 }
@@ -246,22 +249,25 @@ settings_update_file() {
       else if ((k = keyof($0)) != "") active[t, k] = 1
       next
     }
-    FNR == 1 { t = "" }
+    FNR == 1 {
+      t = ""
+      if (substr($0, 1, length(bom)) == bom) { pre = bom; $0 = substr($0, length(bom) + 1) }
+    }
     header($0) {
-      t = tname($0); print
+      t = tname($0); emit($0 "\n")
       for (i = 1; i <= nc; i++)
         if (ct[i] == t && cl[i] != "" && !((t, ck[i]) in active) && !(i in done)) {
           out(ck[i] " = " cl[i]); done[i] = 1
         }
       next
     }
-    bracket($0) { t = ""; print; next }
+    bracket($0) { t = ""; emit($0 "\n"); next }
     (k = keyof($0)) != "" && ((t, k) in want) {
       i = want[t, k]
       if (!(i in done)) { if (cl[i] != "") out(k " = " cl[i]); done[i] = 1 }
       next
     }
-    { print }
+    { emit($0 "\n") }
     END {
       for (i = 1; i <= nc; i++) {
         if (cl[i] == "" || (ct[i] in known) || (ct[i] in tdone)) continue
@@ -457,6 +463,10 @@ settings_update_omnishell() {
     function blank_or_comment(s) { return s ~ /^[ \t]*(#.*)?$/ }
     function header(line) { return line ~ /^[ \t]*\[[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*\][ \t\r]*(#.*)?$/ }
     function bracket(line) { return line ~ /^[ \t]*\[/ }
+    # all output goes through emit(); the BOM of the file is printed once, first
+    function emit(s) { printf "%s%s", pre, s; pre = "" }
+    # generated lines end like the file does
+    function crlf(t) { if (cr != "") gsub(/\n/, cr "\n", t); return t }
     function tname(line,   n) { n = line; sub(/^[ \t]*\[/, "", n); sub(/\].*$/, "", n); gsub(/^[ \t]+|[ \t]+$/, "", n); return n }
     BEGIN {
       n = split(ENVIRON["OVR"], ol, "\n"); cur = ""
@@ -466,23 +476,27 @@ settings_update_omnishell() {
       }
       m = split(ENVIRON["DROP"], dl, " ")
       for (i = 1; i <= m; i++) if (dl[i] != "") drop[dl[i]] = 1
-      skipping = 0; pend = ""
+      skipping = 0; pend = ""; pre = ""; cr = ""; bom = "\357\273\277"
+    }
+    FNR == 1 {
+      if (substr($0, 1, length(bom)) == bom) { pre = bom; $0 = substr($0, length(bom) + 1) }
+      if ($0 ~ /\r$/) cr = "\r"
     }
     header($0) {
-      printf "%s", pend; pend = ""; skipping = 0
+      emit(pend); pend = ""; skipping = 0
       name = tname($0)
       if (name in used) { skipping = 1; next }
-      if (name in otext) { printf "%s", otext[name]; used[name] = 1; skipping = 1; next }
+      if (name in otext) { emit(crlf(otext[name])); used[name] = 1; skipping = 1; next }
       if (name in drop) { skipping = 1; next }
-      print; next
+      emit($0 "\n"); next
     }
-    bracket($0) { printf "%s", pend; pend = ""; skipping = 0; print; next }
+    bracket($0) { emit(pend); pend = ""; skipping = 0; emit($0 "\n"); next }
     skipping { if (blank_or_comment($0)) pend = pend $0 "\n"; else pend = ""; next }
-    { print }
+    { emit($0 "\n") }
     END {
-      printf "%s", pend
+      emit(pend)
       sep = (NR > 0) ? "\n" : ""
-      for (i = 1; i <= no; i++) if (!(oorder[i] in used)) { printf "%s%s", sep, otext[oorder[i]]; sep = "\n" }
+      for (i = 1; i <= no; i++) if (!(oorder[i] in used)) { emit(crlf(sep otext[oorder[i]])); sep = "\n" }
     }
   ' "$file"
 }
