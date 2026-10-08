@@ -488,6 +488,9 @@ s = s.replace(old, 'fresh() { rm -rf "${WORK:?}/cfg" "${WORK:?}/home" "${WORK:?}
 old = 'DOTFILES_CONFIG="$CONF" BOOTSTRAP_SOURCE_ONLY=1 \\\n    "$BASH" -c ". \'$DOTFILES/bootstrap.sh\'; INTERACTIVE_FLAG=1;'
 assert s.count(old) == 1
 s = s.replace(old, 'DOTFILES_CONFIG="$CONF" TMPDIR="$WORK/tmp" BOOTSTRAP_SOURCE_ONLY=1 \\\n    "$BASH" -c ". \'$DOTFILES/bootstrap.sh\'; INTERACTIVE_FLAG=1;')
+old = 'for tool in head rm cat cp mkdir basename dirname uname id tr awk grep sed ln readlink cmp mv mktemp tee git diff sort; do\n  ln -s "$(command -v "$tool")" "$WORK/bin/$tool"\ndone\n'
+assert s.count(old) == 1
+s = s.replace(old, 'for tool in head rm cat cp mkdir basename dirname uname id tr awk grep sed ln readlink cmp mv tee git diff sort; do\n  ln -s "$(command -v "$tool")" "$WORK/bin/$tool"\ndone\n# macOS mktemp ignores TMPDIR when it gets no template; this one honours it, so the tests can see leaks\nprintf \'#!/bin/sh\\nREAL="%s"\\ncase "$*" in\\n  "") exec "$REAL" "${TMPDIR:-/tmp}/tmp.XXXXXX" ;;\\n  "-d") exec "$REAL" -d "${TMPDIR:-/tmp}/tmp.XXXXXX" ;;\\nesac\\nexec "$REAL" "$@"\\n\' "$(command -v mktemp)" > "$WORK/bin/mktemp"\nchmod +x "$WORK/bin/mktemp"\n')
 open(p, 'w').write(s)
 ```
 
@@ -567,7 +570,7 @@ _write_settings_file() {
     BACKUP_MADE=1
   fi
   staged="$(mktemp "$BOOTSTRAP_CONFIG.XXXXXX")" || return 1
-  if cp "$BOOTSTRAP_CONFIG" "$staged" && cat "$1" > "$staged" && mv -f "$staged" "$BOOTSTRAP_CONFIG"; then
+  if cp -p "$BOOTSTRAP_CONFIG" "$staged" && cat "$1" > "$staged" && mv -f "$staged" "$BOOTSTRAP_CONFIG"; then
     return 0
   fi
   rm -f "$staged"

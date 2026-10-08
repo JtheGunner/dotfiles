@@ -15,18 +15,21 @@ check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
 
 # A PATH with only what bootstrap.sh and the library need when sourced.
 mkdir -p "$WORK/bin"
-for tool in head rm cat cp mkdir basename dirname uname id tr awk grep sed ln readlink cmp mv mktemp tee git diff sort; do
+for tool in head rm cat cp mkdir basename dirname uname id tr awk grep sed ln readlink cmp mv tee git diff sort; do
   ln -s "$(command -v "$tool")" "$WORK/bin/$tool"
 done
+# macOS mktemp ignores TMPDIR when it gets no template; this one honours it, so the tests can see leaks
+printf '#!/bin/sh\nREAL="%s"\ncase "$*" in\n  "") exec "$REAL" "${TMPDIR:-/tmp}/tmp.XXXXXX" ;;\n  "-d") exec "$REAL" -d "${TMPDIR:-/tmp}/tmp.XXXXXX" ;;\nesac\nexec "$REAL" "$@"\n' "$(command -v mktemp)" > "$WORK/bin/mktemp"
+chmod +x "$WORK/bin/mktemp"
 
 CONF="$WORK/cfg/config.toml"
 OUT=""; RC=0
-fresh() { rm -rf "${WORK:?}/cfg" "${WORK:?}/home"; mkdir -p "$WORK/cfg" "$WORK/home/.config"; cp "$DOTFILES/config.toml.example" "$CONF"; }
+fresh() { rm -rf "${WORK:?}/cfg" "${WORK:?}/home" "${WORK:?}/tmp"; mkdir -p "$WORK/cfg" "$WORK/home/.config" "$WORK/tmp"; cp "$DOTFILES/config.toml.example" "$CONF"; }
 # <stdin text> <shell code>: run the code with bootstrap.sh sourced and a terminal
 # assumed; the text (printf %b) is the user's typing
 ix_run() {
   RC=0
-  OUT="$(printf '%b' "$1" | env -i PATH="$WORK/bin" HOME="$WORK/home" DOTFILES_CONFIG="$CONF" BOOTSTRAP_SOURCE_ONLY=1 \
+  OUT="$(printf '%b' "$1" | env -i PATH="$WORK/bin" HOME="$WORK/home" DOTFILES_CONFIG="$CONF" TMPDIR="$WORK/tmp" BOOTSTRAP_SOURCE_ONLY=1 \
     "$BASH" -c ". '$DOTFILES/bootstrap.sh'; INTERACTIVE_FLAG=1; interactive_tty() { return 0; }; $2" 2>"$WORK/err")" || RC=$?
 }
 
@@ -142,6 +145,26 @@ check "end of input aborts with exit 1"                        '[ "$RC" = 1 ]'
 check "end of input resets the live omnishell config too"     '! grep -q testmod "$LIVE"'
 check "the message does not claim nothing was installed"       'grep -q "was not changed" "$WORK/err" && ! grep -q "nothing was written or installed" "$WORK/err"'
 check "the README tells both n cases apart"                    'grep -q "settings diff" "$DOTFILES/README.md" && grep -q "module diff" "$DOTFILES/README.md"' 
+
+echo ">> hardening: temp files, atomic write, one backup"
+fresh
+ix_run "yes\n$(empties 19)" 'interactive_settings'
+check "end of input at the settings review leaves no temp file" '[ "$RC" = 1 ] && [ -z "$(ls -A "$WORK/tmp")" ]'
+fresh
+printf 'printf "\\n[modules.testmod]\\nenabled = true\\n" >> "%s"\n' "$LIVE" > "$WORK/tui.sh"
+ix_run "" 'interactive_modules'
+check "end of input at the module review leaves no temp file"   '[ "$RC" = 1 ] && [ -z "$(ls -A "$WORK/tmp")" ]'
+fresh
+ix_run "yes\n$(empties 19)n\n" 'interactive_settings'
+check "declining leaves no temp file either"                    '[ "$RC" = 0 ] && [ -z "$(ls -A "$WORK/tmp")" ]'
+fresh; chmod 644 "$CONF"
+ix_run "yes\n$(empties 19)y\n" 'interactive_settings'
+check "the write leaves no staging file next to the settings file" '[ "$(ls "$WORK/cfg" | tr "\n" " ")" = "config.toml config.toml.bak " ]'
+check "and keeps the file mode"                                 '[ "$(ls -l "$CONF" | cut -c1-10)" = "-rw-r--r--" ]'
+fresh
+ix_run "yes\n$(empties 19)y\ny\n" 'interactive_settings; interactive_modules'
+check "both steps write: both changes are in the file"          'grep -qx "install_zsh = \"yes\"" "$CONF" && grep -qx "\[modules.testmod\]" "$CONF"'
+check "and the .bak still holds the original"                   'cmp -s "$CONF.bak" "$DOTFILES/config.toml.example"'
 
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi

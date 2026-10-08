@@ -1009,6 +1009,47 @@ setup_terminal_app() {
 # --------------------------------------------------------------------------
 INTERACTIVE_CHANGES=""
 PROMPT_ABORT_HOOK=""   # a function to run when the input ends at a prompt
+BACKUP_MADE=""         # the first backup of a run keeps the original settings file
+INTERACTIVE_TMPFILES=""
+
+# NAME: make a temp file, remember it for the exit trap, store its path in NAME
+# (no command substitution: the record has to survive in this shell)
+_interactive_mktemp() {
+  local f
+  f="$(mktemp)" || return 1
+  INTERACTIVE_TMPFILES="${INTERACTIVE_TMPFILES}${f}"$'\n'
+  printf -v "$1" '%s' "$f"
+}
+
+_interactive_cleanup() {
+  local f
+  while IFS= read -r f; do
+    [ -z "$f" ] || rm -f "$f"
+  done <<< "$INTERACTIVE_TMPFILES"
+}
+
+# temp files go away on exit, end of input and Ctrl-C alike
+_interactive_traps() {
+  trap _interactive_cleanup EXIT
+  trap 'exit 130' INT TERM HUP
+}
+
+# NEW replaces the settings file: the first call of a run keeps the original as
+# .bak, the content goes in through a temp file next to the target and a rename,
+# so an interrupted write cannot leave half a file
+_write_settings_file() {
+  local staged
+  if [ -z "$BACKUP_MADE" ]; then
+    cp "$BOOTSTRAP_CONFIG" "$BOOTSTRAP_CONFIG.bak" || return 1
+    BACKUP_MADE=1
+  fi
+  staged="$(mktemp "$BOOTSTRAP_CONFIG.XXXXXX")" || return 1
+  if cp -p "$BOOTSTRAP_CONFIG" "$staged" && cat "$1" > "$staged" && mv -f "$staged" "$BOOTSTRAP_CONFIG"; then
+    return 0
+  fi
+  rm -f "$staged"
+  return 1
+}
 
 # PROMPT: reads one line into REPLY; end of input aborts before anything changes
 _prompt_line() {
@@ -1062,7 +1103,7 @@ _review_and_install() {
   [ -z "${2:-}" ] || log "$2"
   _prompt_line "Write these changes to $BOOTSTRAP_CONFIG? [y/N] "
   case "$REPLY" in y | Y | yes | YES) ;; *) return 1 ;; esac
-  { cp "$BOOTSTRAP_CONFIG" "$BOOTSTRAP_CONFIG.bak" && cat "$new" > "$BOOTSTRAP_CONFIG"; } || {
+  _write_settings_file "$new" || {
     warn "cannot write $BOOTSTRAP_CONFIG"
     exit 1
   }
@@ -1072,12 +1113,13 @@ _review_and_install() {
 interactive_settings() {
   [ -n "$INTERACTIVE_FLAG" ] || return 0
   local tmp
+  _interactive_traps
   interactive_collect
   if [ -z "$INTERACTIVE_CHANGES" ]; then
     log "settings unchanged"
     return 0
   fi
-  tmp="$(mktemp)"
+  _interactive_mktemp tmp
   settings_update_file "$BOOTSTRAP_CONFIG" "$INTERACTIVE_CHANGES" > "$tmp"
   if ! _review_and_install "$tmp"; then
     rm -f "$tmp"
@@ -1094,6 +1136,7 @@ interactive_settings() {
 interactive_modules() {
   [ -n "$INTERACTIVE_FLAG" ] || return 0
   local live tmp rc=0
+  _interactive_traps
   prepare_omnishell_config
   live="${XDG_CONFIG_HOME:-$HOME/.config}/omnishell/config.toml"
   log "omnishell tui: Space toggles a module, o edits its options, a previews the plan, q quits"
@@ -1102,7 +1145,7 @@ interactive_modules() {
     warn "omnishell tui exited with $rc - the module selection was not taken over"
     exit "$rc"
   fi
-  tmp="$(mktemp)"
+  _interactive_mktemp tmp
   settings_update_omnishell "$BOOTSTRAP_CONFIG" "$live" "$DOTFILES/omnishell/config.toml" > "$tmp"
   # a declined or aborted review must not leave the TUI's selection in the live config
   PROMPT_ABORT_HOOK=_write_omnishell_config
