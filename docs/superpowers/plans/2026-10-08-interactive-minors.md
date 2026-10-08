@@ -71,8 +71,12 @@ fresh
 ix_run "" '_write_settings_file "$BOOTSTRAP_CONFIG"; printf %s "$INTERACTIVE_TMPFILES"'
 check "the staging file is registered for cleanup"          'grep -q "config.toml\." <<< "$OUT"'
 fresh
-ix_run "" 'INTERACTIVE_FLAG=; interactive_settings; interactive_modules; trap -p; echo END'
-check "a run without --interactive installs no trap"        '[ "$OUT" = END ]'
+# only our own traps count: a runner may start the shell with SIGPIPE ignored, which `trap -p` also lists;
+# the output goes to a file because bash 3.2 does not show the traps inside a pipeline
+ix_run "" 'INTERACTIVE_FLAG=; interactive_settings; interactive_modules; trap -p EXIT INT TERM HUP > "$HOME/traps"; grep -c _interactive "$HOME/traps" || true'
+check "a run without --interactive installs no trap"        '[ "$OUT" = 0 ]'
+ix_run "" '_interactive_traps; trap -p EXIT INT TERM HUP > "$HOME/traps"; grep -c _interactive "$HOME/traps" || true'
+check "the same probe sees the four traps once they are set" '[ "$OUT" = 4 ]'
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
