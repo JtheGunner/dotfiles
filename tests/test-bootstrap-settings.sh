@@ -276,7 +276,7 @@ printf 'set -g prefix C-z\nunbind C-b\n' > "$WORK/tracked.conf"
 fresh
 sh_run '' '_tracked_tmux_prefix "'"$WORK"'/tracked.conf"'
 check "the tracked prefix is read from the file"     '[ "$OUT" = C-z ]'
-sh_run '' '_tracked_tmux_prefix'
+sh_run '' '_tracked_tmux_prefix "$DOTFILES/tmux/.tmux.conf"'
 check "the repo tmux.conf sets C-a"                  '[ "$OUT" = C-a ]'
 sh_run '' '_tracked_tmux_prefix /nonexistent'
 check "a missing file yields nothing and no error"   '[ -z "$OUT" ] && [ "$RC" = 0 ]'

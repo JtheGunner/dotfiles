@@ -136,7 +136,7 @@ printf 'set -g prefix C-z\nunbind C-b\n' > "$WORK/tracked.conf"
 fresh
 sh_run '' '_tracked_tmux_prefix "'"$WORK"'/tracked.conf"'
 check "the tracked prefix is read from the file"     '[ "$OUT" = C-z ]'
-sh_run '' '_tracked_tmux_prefix'
+sh_run '' '_tracked_tmux_prefix "$DOTFILES/tmux/.tmux.conf"'
 check "the repo tmux.conf sets C-a"                  '[ "$OUT" = C-a ]'
 sh_run '' '_tracked_tmux_prefix /nonexistent'
 check "a missing file yields nothing and no error"   '[ -z "$OUT" ] && [ "$RC" = 0 ]'
@@ -177,14 +177,14 @@ edit('bootstrap.sh', [
 ('''render_tmux_settings() {
   local out="$HOME/.config/tmux-settings.conf" body tmp
   body="$(settings_render_tmux)"''',
-'''# the prefix the tracked tmux.conf sets, so the generated file can unbind it
+'''# the prefix a tmux.conf (FILE) sets, so the generated file can unbind it
 _tracked_tmux_prefix() {
-  awk '$1 == "set" && $2 == "-g" && $3 == "prefix" { print $4; exit }' "${1:-$DOTFILES/tmux/.tmux.conf}" 2>/dev/null || true
+  awk '$1 == "set" && $2 == "-g" && $3 == "prefix" { print $4; exit }' "$1" 2>/dev/null || true
 }
 
 render_tmux_settings() {
   local out="$HOME/.config/tmux-settings.conf" body tmp
-  body="$(settings_render_tmux "$(_tracked_tmux_prefix)")"'''),
+  body="$(settings_render_tmux "$(_tracked_tmux_prefix "$DOTFILES/tmux/.tmux.conf")")"'''),
 ])
 
 edit('config.toml.example', [
