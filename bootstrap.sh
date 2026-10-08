@@ -1028,10 +1028,19 @@ _interactive_cleanup() {
   done <<< "$INTERACTIVE_TMPFILES"
 }
 
-# temp files go away on exit, end of input and Ctrl-C alike
+# a signal during a review undoes what the hook undoes, then leaves with the
+# signal's conventional exit code; the EXIT trap removes the temp files
+_interactive_abort() {
+  [ -z "$PROMPT_ABORT_HOOK" ] || "$PROMPT_ABORT_HOOK"
+  exit "$1"
+}
+
+# temp files go away on exit, end of input and signals alike
 _interactive_traps() {
   trap _interactive_cleanup EXIT
-  trap 'exit 130' INT TERM HUP
+  trap '_interactive_abort 130' INT
+  trap '_interactive_abort 143' TERM
+  trap '_interactive_abort 129' HUP
 }
 
 # NEW replaces the settings file: the first call of a run keeps the original as
@@ -1053,6 +1062,7 @@ _write_settings_file() {
     BACKUP_MADE=1
   fi
   staged="$(mktemp "$target.XXXXXX")" || return 1
+  INTERACTIVE_TMPFILES="${INTERACTIVE_TMPFILES}${staged}"$'\n'
   if cp -p "$target" "$staged" && cat "$1" > "$staged" && mv -f "$staged" "$target"; then
     return 0
   fi

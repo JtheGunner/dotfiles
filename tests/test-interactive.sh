@@ -175,6 +175,27 @@ check "the content went to the file it points at"               'grep -qx "insta
 check "no staging file is left next to the target"              '[ "$(ls "$WORK/priv" | tr "\n" " ")" = "config.toml " ]'
 check "the backup sits next to the link"                        'cmp -s "$CONF.bak" "$DOTFILES/config.toml.example"' 
 
+echo ">> signals: abort hook, exit codes, cleanup"
+sig_case() {   # <signal> <expected exit code>: the signal arrives while a module review is open
+  fresh
+  ix_run "" 'prepare_omnishell_config; _interactive_traps; _interactive_mktemp t; : > "$t"
+    printf "\n[modules.testmod]\nenabled = true\n" >> "$HOME/.config/omnishell/config.toml"
+    PROMPT_ABORT_HOOK=_write_omnishell_config; kill -'"$1"' $$; echo not-reached'
+  check "$1 exits with $2"                                  "[ \"\$RC\" = $2 ]"
+  check "$1 does not let the run continue"                  '! grep -q not-reached <<< "$OUT"'
+  check "$1 removes the temp files"                         '[ -z "$(ls -A "$WORK/tmp")" ]'
+  check "$1 resets the live omnishell config"               '! grep -q testmod "$LIVE"'
+}
+sig_case INT 130
+sig_case TERM 143
+sig_case HUP 129
+fresh
+ix_run "" '_write_settings_file "$BOOTSTRAP_CONFIG"; printf %s "$INTERACTIVE_TMPFILES"'
+check "the staging file is registered for cleanup"          'grep -q "config.toml\." <<< "$OUT"'
+fresh
+ix_run "" 'INTERACTIVE_FLAG=; interactive_settings; interactive_modules; trap -p; echo END'
+check "a run without --interactive installs no trap"        '[ "$OUT" = END ]'
+
 echo
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
