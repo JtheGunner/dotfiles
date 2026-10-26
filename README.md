@@ -371,6 +371,7 @@ adding or removing files in a package, run `make restow`.
 
 |    | Package    | Symlinks to                            | Contains                                                                                                                                          |
 |:--:|------------|----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| 🐚 | `zsh/`     | `~/.zprofile`                          | login-shell `PATH` setup only; the `zshrc*.zsh` rc libraries in the same directory are **not** stowed (`sourced` instead, see above)              |
 | 🌿 | `git/`     | `~/.config/git/{config,ignore}`        | aliases (`st`, `co`, `lg`, `coi` = fzf branch switch), `main` default branch, global ignore; **no identity** (see [Git identity](#-git-identity)) |
 | 🪟 | `tmux/`    | `~/.tmux.conf`                         | prefix `C-a`, 1-based index, `\|` / `-` splits, mouse on, vi mode, Root-Loops-flavoured status bar (`prefix r` reloads; after changing `prefix` in the settings file, reload once with the old prefix or restart the server)                           |
 | 🦇 | `bat/`     | `~/.config/bat/config`                 | `--theme="ansi"` so `bat` / `delta` / fzf previews inherit the terminal palette                                                                   |
