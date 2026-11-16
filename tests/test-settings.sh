@@ -312,14 +312,16 @@ if command -v tmux >/dev/null 2>&1; then
   write '[tmux]' 'prefix = "C-a"' 'mouse = false' 'history_limit = 777'
   settings_load "$F" 2>/dev/null
   settings_render_tmux > "$WORK/tmux-settings.conf"
-  SOCK="dotfiles-test-$$"
+  # A fresh socket per call: kill-server returns before the server is gone,
+  # so a reused socket can hit the dying server of the previous call.
   tmux_show() {
-    tmux -L "$SOCK" -f /dev/null new-session -d 'sleep 30' \; source-file "$WORK/tmux-settings.conf" \; show-options -gv "$1" 2>/dev/null
-    tmux -L "$SOCK" kill-server 2>/dev/null || true
+    local sock="dotfiles-test-$$-$RANDOM" value
+    value="$(tmux -L "$sock" -f /dev/null new-session -d 'sleep 30' \; source-file "$WORK/tmux-settings.conf" \; show-options -gv "$1" 2>/dev/null)"
+    tmux -L "$sock" kill-server 2>/dev/null || true
+    printf '%s\n' "$value"
   }
   check "real tmux accepts the generated file and keeps prefix C-a" '[ "$(tmux_show prefix)" = C-a ]'
   check "real tmux applies history-limit"                           '[ "$(tmux_show history-limit)" = 777 ]'
-  tmux -L "$SOCK" kill-server 2>/dev/null || true
 else
   pass "tmux is not installed - syntax check skipped"
 fi
