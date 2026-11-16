@@ -1,0 +1,7 @@
+# doc-drift-checker configuration. Reports README sections whose linked code
+# changed while the section itself did not. Sections are linked to code through
+# the file paths and relative links the docs mention. The built-in ignore list
+# applies (tests, generated code, lockfiles, vendored code, CHANGELOG.md,
+# LICENSE and CONTRIBUTING.md).
+docs:
+  - "README.md"
