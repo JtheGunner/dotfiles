@@ -2,6 +2,7 @@
 # bootstrap.sh install_ghostty on apt systems: the community .deb is built for
 # Ubuntu, so only Ubuntu and its derivatives (ID=ubuntu or ID_LIKE containing
 # ubuntu) try it. Debian and unknown systems warn with the download page.
+# shellcheck disable=SC2034  # RC is read inside the eval'd check expressions
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
