@@ -121,7 +121,7 @@ check "the last assignment wins" '[ "$(settings_get bootstrap.install_zsh)" = ye
 
 settings_load "$WORK/missing.toml" 2>"$ERR"
 check "a missing file is not an error" '[ $? -eq 0 ] && [ -z "$(settings_get bootstrap.install_zsh)" ] && [ ! -s "$ERR" ]'
-check "the schema lists every key" '[ "$(settings_schema_keys | tr "\n" " ")" = "bootstrap.install_zsh bootstrap.set_default_shell bootstrap.assume_yes bootstrap.terminals ghostty.keybinds ghostty.font_family ghostty.font_size ghostty.background_opacity tmux.prefix tmux.mouse tmux.mode_keys tmux.base_index tmux.escape_time tmux.history_limit tmux.status_position git.user_name git.user_email git.signing_key git.default_branch git.editor git.pull_rebase " ]'
+check "the schema lists every key" '[ "$(settings_schema_keys | tr "\n" " ")" = "bootstrap.install_zsh bootstrap.set_default_shell bootstrap.assume_yes bootstrap.terminals bootstrap.install_ghostty ghostty.keybinds ghostty.font_family ghostty.font_size ghostty.background_opacity tmux.prefix tmux.mouse tmux.mode_keys tmux.base_index tmux.escape_time tmux.history_limit tmux.status_position git.user_name git.user_email git.signing_key git.default_branch git.editor git.pull_rebase " ]'
 
 echo ">> omnishell merge"
 DEFAULT="$WORK/default.toml"

@@ -115,6 +115,7 @@ SETTINGS_SCHEMA='bootstrap.install_zsh enum:yes,no,ask
 bootstrap.set_default_shell enum:yes,no,ask
 bootstrap.assume_yes bool
 bootstrap.terminals list
+bootstrap.install_ghostty bool
 ghostty.keybinds enum:auto,mac,linux
 ghostty.font_family string
 ghostty.font_size positive

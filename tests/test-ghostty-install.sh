@@ -21,11 +21,13 @@ for tool in head rm cat cp mkdir basename dirname uname id tr awk grep sed ln re
 done
 printf '#!/bin/sh\n' > "$WORK/bin/dpkg"; chmod +x "$WORK/bin/dpkg"
 
+GHOSTTY_ENV=""
 # run <os-release file>: install_ghostty with the .deb helper stubbed to a marker
 run() {
   rm -f "$WORK/deb-tried"
   RC=0
-  env -i PATH="$WORK/bin" HOME="$WORK/home" DOTFILES_OS_RELEASE="$1" \
+  # shellcheck disable=SC2086  # GHOSTTY_ENV is a list of NAME=value words
+  env -i PATH="$WORK/bin" HOME="$WORK/home" DOTFILES_OS_RELEASE="$1" $GHOSTTY_ENV \
     BOOTSTRAP_SOURCE_ONLY=1 "$BASH" -c ". '$DOTFILES/bootstrap.sh'; OS=Linux
       _install_ghostty_deb() { touch '$WORK/deb-tried'; }; install_ghostty" >"$WORK/out" 2>"$WORK/err" || RC=$?
 }
@@ -56,6 +58,38 @@ release ""
 check "an empty file skips the .deb" '[ "$RC" = 0 ] && [ ! -e "$WORK/deb-tried" ] && said "this distribution"'
 run "$WORK/missing"
 check "a missing file skips the .deb" '[ "$RC" = 0 ] && [ ! -e "$WORK/deb-tried" ]'
+
+echo ">> switched off"
+UBUNTU=$'ID=ubuntu\nID_LIKE=debian\nVERSION_ID="24.04"'
+GHOSTTY_ENV="DOTFILES_INSTALL_GHOSTTY=0"
+release "$UBUNTU"
+check "the environment skips the .deb on Ubuntu" '[ "$RC" = 0 ] && [ ! -e "$WORK/deb-tried" ]'
+check "says that the install is skipped" 'said "skipping ghostty"'
+GHOSTTY_ENV=""
+release "$UBUNTU"
+check "without the switch the .deb is tried again" '[ -e "$WORK/deb-tried" ]'
+
+printf '[bootstrap]\ninstall_ghostty = false\n' > "$WORK/off.toml"
+GHOSTTY_ENV="DOTFILES_CONFIG=$WORK/off.toml"
+release "$UBUNTU"
+check "install_ghostty = false in the settings file skips the .deb" '[ "$RC" = 0 ] && [ ! -e "$WORK/deb-tried" ] && said "skipping ghostty"'
+GHOSTTY_ENV=""
+
+# macOS: brew is stubbed to a marker; the cask must not be installed when off
+printf '#!/bin/sh\necho "$*" >> "%s/brew-log"\n' "$WORK" > "$WORK/bin/brew"; chmod +x "$WORK/bin/brew"
+mac() {
+  rm -f "$WORK/brew-log"
+  env -i PATH="$WORK/bin" HOME="$WORK/home" $1 BOOTSTRAP_SOURCE_ONLY=1 "$BASH" -c \
+    ". '$DOTFILES/bootstrap.sh'; OS=Darwin; install_ghostty" >"$WORK/out" 2>"$WORK/err" || true
+}
+mac ""
+check "macOS installs the cask by default" 'grep -q "install --cask ghostty" "$WORK/brew-log"'
+mac "DOTFILES_INSTALL_GHOSTTY=false"
+check "macOS does not touch brew when switched off" '[ ! -e "$WORK/brew-log" ] && said "skipping ghostty"'
+
+echo ">> command line"
+check "--help lists --ghostty" "bash '$DOTFILES/bootstrap.sh' --help | grep -q -- '--ghostty'"
+check "--help lists --no-ghostty" "bash '$DOTFILES/bootstrap.sh' --help | grep -q -- '--no-ghostty'"
 
 echo
 if [ "$failures" -eq 0 ]; then echo "all ghostty-install checks passed"; else echo "$failures check(s) failed"; exit 1; fi

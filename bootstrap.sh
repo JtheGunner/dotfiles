@@ -4,6 +4,7 @@
 #   git clone https://github.com/JtheGunner/dotfiles ~/.dotfiles
 #   ~/.dotfiles/bootstrap.sh [--yes] [--install-zsh | --no-install-zsh]
 #                            [--set-default-shell | --no-set-default-shell]
+#                            [--ghostty | --no-ghostty]
 #
 # Run it from whichever checkout you want to be live - it installs from there.
 # Before changing anything it checks every reference to a checkout (the DOTFILES=
@@ -34,6 +35,9 @@
 # DOTFILES_SET_DEFAULT_SHELL=yes or set_default_shell = "yes") or an interactive
 # answer - never by --yes alone. Otherwise whatever your current login shell is
 # (bash or zsh) is what gets configured.
+#
+# Ghostty is installed by default; --no-ghostty, DOTFILES_INSTALL_GHOSTTY=0 or
+# install_ghostty = false skips the installation. Its config is stowed either way.
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,6 +51,7 @@ warn() { printf '\033[1;33m warn:\033[0m %s\n' "$*" >&2; }
 # and a mistyped flag change nothing.
 INSTALL_ZSH_FLAG=""
 SET_DEFAULT_SHELL_FLAG=""
+INSTALL_GHOSTTY_FLAG=""
 ASSUME_YES_FLAG=""
 INTERACTIVE_FLAG=""
 parse_args() {
@@ -59,16 +64,20 @@ parse_args() {
       --no-install-zsh) INSTALL_ZSH_FLAG=no ;;
       --set-default-shell) SET_DEFAULT_SHELL_FLAG=yes ;;
       --no-set-default-shell) SET_DEFAULT_SHELL_FLAG=no ;;
+      --ghostty) INSTALL_GHOSTTY_FLAG=yes ;;
+      --no-ghostty) INSTALL_GHOSTTY_FLAG=no ;;
       -h | --help)
         cat <<USAGE
 usage: $(basename "$0") [--interactive] [--yes] [--install-zsh | --no-install-zsh]
-                    [--set-default-shell | --no-set-default-shell]
+                    [--set-default-shell | --no-set-default-shell] [--ghostty | --no-ghostty]
   --yes             assume "yes" for all prompts (switch rc files + stow links from another checkout to this one);
                     does NOT install zsh or change the login shell
   --install-zsh     install zsh if it is missing, without asking
   --no-install-zsh  never install zsh
   --set-default-shell     make zsh the login shell (chsh) if it is not, without asking
   --no-set-default-shell  never change the login shell
+  --ghostty         install Ghostty (the default)
+  --no-ghostty      skip installing Ghostty; its config is still stowed
   --interactive     ask for the settings and pick the omnishell modules in its TUI; writes them to the
                     settings file after showing a diff (needs a terminal, cannot be combined with --yes)
 USAGE
@@ -94,6 +103,7 @@ settings_load "$BOOTSTRAP_CONFIG"
 read_conf_values() {
   CONF_INSTALL_ZSH="$(settings_get bootstrap.install_zsh)"
   CONF_SET_DEFAULT_SHELL="$(settings_get bootstrap.set_default_shell)"
+  CONF_INSTALL_GHOSTTY="$(settings_get bootstrap.install_ghostty)"
   CONF_ASSUME_YES="$(settings_get bootstrap.assume_yes)"
   CONF_TERMINALS="$(settings_get bootstrap.terminals)"
   CONF_GHOSTTY_KEYBINDS="$(settings_get ghostty.keybinds)"
@@ -415,7 +425,26 @@ _install_ghostty_deb() {
   return $rc
 }
 
+# Whether install_ghostty() installs Ghostty, highest precedence first:
+# --ghostty / --no-ghostty, DOTFILES_INSTALL_GHOSTTY (1, true, yes / 0, false, no),
+# install_ghostty in the settings file, default on.
+_install_ghostty_enabled() {
+  local mode="$INSTALL_GHOSTTY_FLAG"
+  if [ -z "$mode" ] && [ -n "${DOTFILES_INSTALL_GHOSTTY:-}" ]; then
+    case "$DOTFILES_INSTALL_GHOSTTY" in
+      1 | true | yes) mode=yes ;;
+      0 | false | no) mode=no ;;
+      *) warn "invalid DOTFILES_INSTALL_GHOSTTY value '$DOTFILES_INSTALL_GHOSTTY' (use 1, true, yes, 0, false or no) - ignored" ;;
+    esac
+  fi
+  if [ -z "$mode" ]; then
+    case "$CONF_INSTALL_GHOSTTY" in false) mode=no ;; *) mode=yes ;; esac
+  fi
+  [ "$mode" = yes ]
+}
+
 install_ghostty() {
+  _install_ghostty_enabled || { log "skipping ghostty install (switched off; its config is still stowed)"; return 0; }
   command -v ghostty >/dev/null 2>&1 && { log "ghostty already installed"; return; }
   if [ "$OS" = "Darwin" ]; then
     if command -v brew >/dev/null 2>&1; then

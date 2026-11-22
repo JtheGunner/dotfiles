@@ -82,6 +82,39 @@ check "--set-default-shell sets the flag to yes"     '[ "$OUT" = yes ]'
 sh_run '' 'parse_args --no-set-default-shell; printf %s "$SET_DEFAULT_SHELL_FLAG"'
 check "--no-set-default-shell sets the flag to no"   '[ "$OUT" = no ]'
 
+fresh
+sh_run '' '_install_ghostty_enabled && printf yes || printf no'
+check "install_ghostty defaults to on"               '[ "$OUT" = yes ]'
+fresh; conf '[bootstrap]' 'install_ghostty = false'
+sh_run '' '_install_ghostty_enabled && printf yes || printf no'
+check "install_ghostty = false comes from the file"  '[ "$OUT" = no ]'
+fresh; conf '[bootstrap]' 'install_ghostty = true'
+sh_run '' '_install_ghostty_enabled && printf yes || printf no'
+check "install_ghostty = true comes from the file"   '[ "$OUT" = yes ]'
+fresh; conf '[bootstrap]' 'install_ghostty = true'
+for off in 0 false no; do
+  sh_run "DOTFILES_INSTALL_GHOSTTY=$off" '_install_ghostty_enabled && printf yes || printf no'
+  check "DOTFILES_INSTALL_GHOSTTY=$off beats the file" '[ "$OUT" = no ]'
+done
+fresh; conf '[bootstrap]' 'install_ghostty = false'
+for on in 1 true yes; do
+  sh_run "DOTFILES_INSTALL_GHOSTTY=$on" '_install_ghostty_enabled && printf yes || printf no'
+  check "DOTFILES_INSTALL_GHOSTTY=$on beats the file" '[ "$OUT" = yes ]'
+done
+sh_run 'DOTFILES_INSTALL_GHOSTTY=bogus' '_install_ghostty_enabled && printf yes || printf no'
+check "an invalid env value warns and falls back to the file" '[ "$OUT" = no ] && grep -q "DOTFILES_INSTALL_GHOSTTY" "$WORK/err"'
+sh_run 'DOTFILES_INSTALL_GHOSTTY=yes' 'INSTALL_GHOSTTY_FLAG=no; _install_ghostty_enabled && printf yes || printf no'
+check "--no-ghostty beats the environment"           '[ "$OUT" = no ]'
+sh_run 'DOTFILES_INSTALL_GHOSTTY=no' 'INSTALL_GHOSTTY_FLAG=yes; _install_ghostty_enabled && printf yes || printf no'
+check "--ghostty beats the environment"              '[ "$OUT" = yes ]'
+sh_run '' 'parse_args --ghostty; printf %s "$INSTALL_GHOSTTY_FLAG"'
+check "--ghostty sets the flag to yes"               '[ "$OUT" = yes ]'
+sh_run '' 'parse_args --no-ghostty; printf %s "$INSTALL_GHOSTTY_FLAG"'
+check "--no-ghostty sets the flag to no"             '[ "$OUT" = no ]'
+fresh; conf '[bootstrap]' 'install_ghostty = false'
+sh_run '' 'printf "%s " "${PACKAGES[@]}"'
+check "the ghostty stow package stays when the install is off" 'grep -qw ghostty <<< "$OUT"'
+
 echo ">> seeding"
 fresh; rm -rf "$WORK/cfg"
 sh_run '' 'seed_bootstrap_config'

@@ -30,6 +30,12 @@
 # Flags: --set-default-shell / --no-set-default-shell    Environment: DOTFILES_SET_DEFAULT_SHELL
 #set_default_shell = "ask"
 #
+# Install Ghostty (brew cask, apt, or the Ubuntu .deb): true or false. false skips only
+# the installation; the Ghostty config is still stowed, so installing Ghostty later
+# needs no further setup.
+# Flags: --ghostty / --no-ghostty    Environment: DOTFILES_INSTALL_GHOSTTY (1/0, true/false, yes/no)
+#install_ghostty = true
+#
 # Answer "yes" to every prompt, e.g. switch rc files and stow links from another
 # checkout to this one.
 # Flag: --yes    Environment: DOTFILES_ASSUME_YES (1 or 0)
