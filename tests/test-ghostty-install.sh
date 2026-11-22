@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# bootstrap.sh install_ghostty on apt systems: the community .deb is built for
+# Ubuntu, so only Ubuntu and its derivatives (ID=ubuntu or ID_LIKE containing
+# ubuntu) try it. Debian and unknown systems warn with the download page.
+# shellcheck disable=SC2034  # RC is read inside the eval'd check expressions
+set -euo pipefail
+
+DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+failures=0
+
+pass() { printf '   ok   %s\n' "$1"; }
+fail() { printf '   FAIL %s\n' "$1"; failures=$((failures + 1)); }
+check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
+
+# dpkg exists so the apt branch is taken; ghostty and apt-cache do not.
+mkdir -p "$WORK/bin"
+for tool in head rm cat cp mkdir basename dirname uname id tr awk grep sed ln readlink cmp mv mktemp tee git cut touch; do
+  ln -s "$(command -v "$tool")" "$WORK/bin/$tool"
+done
+printf '#!/bin/sh\n' > "$WORK/bin/dpkg"; chmod +x "$WORK/bin/dpkg"
+
+# run <os-release file>: install_ghostty with the .deb helper stubbed to a marker
+run() {
+  rm -f "$WORK/deb-tried"
+  RC=0
+  env -i PATH="$WORK/bin" HOME="$WORK/home" DOTFILES_OS_RELEASE="$1" \
+    BOOTSTRAP_SOURCE_ONLY=1 "$BASH" -c ". '$DOTFILES/bootstrap.sh'; OS=Linux
+      _install_ghostty_deb() { touch '$WORK/deb-tried'; }; install_ghostty" >"$WORK/out" 2>"$WORK/err" || RC=$?
+}
+# release <content>: write an os-release file and run against it
+release() { printf '%s\n' "$1" > "$WORK/os-release"; run "$WORK/os-release"; }
+said() { grep -q -- "$1" "$WORK/out" "$WORK/err"; }
+
+echo ">> Ubuntu"
+release $'ID=ubuntu\nID_LIKE=debian\nVERSION_ID="24.04"\nPRETTY_NAME="Ubuntu 24.04 LTS"'
+check "tries the .deb" '[ "$RC" = 0 ] && [ -e "$WORK/deb-tried" ]'
+
+echo ">> Ubuntu derivative"
+release $'ID=linuxmint\nID_LIKE="ubuntu debian"\nVERSION_ID="22"'
+check "tries the .deb" '[ -e "$WORK/deb-tried" ]'
+
+echo ">> Debian"
+release $'ID=debian\nVERSION_ID="12"\nPRETTY_NAME="Debian GNU/Linux 12 (bookworm)"'
+check "skips the .deb" '[ "$RC" = 0 ] && [ ! -e "$WORK/deb-tried" ]'
+check "names the distribution, not Ubuntu 12" 'said "Debian GNU/Linux 12" && ! said "Ubuntu 12"'
+check "points at the download page" 'said "https://ghostty.org/download"'
+
+echo ">> Debian derivative without ubuntu"
+release $'ID=raspbian\nID_LIKE=debian\nVERSION_ID="12"'
+check "skips the .deb" '[ ! -e "$WORK/deb-tried" ] && said "https://ghostty.org/download"'
+
+echo ">> unknown distribution"
+release ""
+check "an empty file skips the .deb" '[ "$RC" = 0 ] && [ ! -e "$WORK/deb-tried" ] && said "this distribution"'
+run "$WORK/missing"
+check "a missing file skips the .deb" '[ "$RC" = 0 ] && [ ! -e "$WORK/deb-tried" ]'
+
+echo
+if [ "$failures" -eq 0 ]; then echo "all ghostty-install checks passed"; else echo "$failures check(s) failed"; exit 1; fi
