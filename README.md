@@ -29,13 +29,14 @@ nothing is configured twice:
 | **`~/.zshrc.local` / `~/.bashrc.local`**                 | machine-specific and secret: per-host `PATH`, tool completions, tokens. **Not version-controlled.**                                                                                                                                              | sourced last by the same marker block                                                                     |
 
 omnishell is consumed as a released binary (Homebrew tap / curl installer); this
-repo never modifies it. **omnishell 0.7.1 or newer is required**: older releases
+repo never modifies it. **omnishell 0.8.0 or newer is required**: older releases
 don't know all of the `starship`, `root-loops`, `tmux`, `broot`, `direnv`, `mise` and
 `colorized-man` modules, and install `mise`, `starship` and `broot` with a long
 source build where no distro package exists, 0.7.0 is the first with
-`omnishell tui`, which `--interactive` uses, and before 0.7.1 a tool installed
+`omnishell tui`, which `--interactive` uses, before 0.7.1 a tool installed
 from a release binary or a source build is not on `PATH` at shell start (no
-`starship` prompt). `bootstrap.sh` upgrades an older
+`starship` prompt), and before 0.8.0 `modern-aliases` is degraded where the
+distro has no `eza` package. `bootstrap.sh` upgrades an older
 install, or stops with a message if it can't.
 
 ```text
@@ -74,7 +75,7 @@ exec $SHELL
 `bootstrap.sh`:
 
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
-2. installs dependencies, omnishell (upgrading it below 0.7.1) and Ghostty, and zsh if you opted in (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
+2. installs dependencies, omnishell (upgrading it below 0.8.0) and Ghostty, and zsh if you opted in (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
 4. stows the packages
 5. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
@@ -479,9 +480,10 @@ tests/                    test-*.sh (make test) + bootstrap-smoke.sh (CI)
 
 - The git config lives at `~/.config/git/config` (not `~/.gitconfig`). The
   `delta` paging config is `~/.gitconfig.delta`, which `bootstrap.sh` writes only
-  when `delta` is installed. On Debian stable, `git-delta` and `eza` (used by
-  omnishell's `modern-aliases`) live in `bookworm-backports`, so without them
-  those pieces degrade gracefully instead of breaking `git`.
+  when `delta` is installed. On Debian stable, `git-delta` lives in
+  `bookworm-backports`, so without it that piece degrades gracefully instead of
+  breaking `git`. `eza` (used by omnishell's `modern-aliases`) is installed as
+  an upstream release binary where the distro has no package.
 - `zsh/zshrc.zsh` and `shell.d/41-functions.sh` started from
   [hamvocke/dotfiles](https://github.com/hamvocke/dotfiles); the Ghostty cursor
   shader is [sahaj-b/ghostty-cursor-shaders](https://github.com/sahaj-b/ghostty-cursor-shaders)
