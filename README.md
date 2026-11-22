@@ -75,7 +75,7 @@ exec $SHELL
 `bootstrap.sh`:
 
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
-2. installs dependencies, omnishell (upgrading it below 0.8.0) and Ghostty, and zsh if you opted in, then offers to make zsh your login shell (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
+2. installs dependencies, omnishell (upgrading it below 0.8.0) and Ghostty (unless switched off), and zsh if you opted in, then offers to make zsh your login shell (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
 4. stows the packages
 5. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
@@ -173,6 +173,7 @@ overwritten. Point `DOTFILES_CONFIG` at another path to use a different file.
 |------------------------------------|---------------------------------|---------|--------------------------------------|-------------------------|
 | `[bootstrap]` `install_zsh`        | `"yes"` · `"no"` · `"ask"`      | `"ask"` | `--install-zsh` / `--no-install-zsh` | `DOTFILES_INSTALL_ZSH`  |
 | `[bootstrap]` `set_default_shell`  | `"yes"` · `"no"` · `"ask"`      | `"ask"` | `--set-default-shell` / `--no-set-default-shell` | `DOTFILES_SET_DEFAULT_SHELL` |
+| `[bootstrap]` `install_ghostty`    | `true` · `false`                | `true`  | `--ghostty` / `--no-ghostty`         | `DOTFILES_INSTALL_GHOSTTY` |
 | `[bootstrap]` `assume_yes`         | `true` · `false`                | `false` | `--yes`                              | `DOTFILES_ASSUME_YES`   |
 | `[bootstrap]` `terminals`          | list of package names           | `[]`    | -                                    | `DOTFILES_TERMINALS`    |
 | `[ghostty]` `keybinds`             | `"auto"` · `"mac"` · `"linux"`  | `"auto"`| -                                    | `DOTFILES_GHOSTTY_KEYBINDS` |
@@ -209,6 +210,10 @@ size = 10000
 > `$SHELL` of the running session is still the old login shell. If `chsh` cannot run (no
 > terminal, zsh missing from `/etc/shells`, `chsh` fails), `bootstrap.sh` prints the
 > command to run yourself and carries on. `/etc/shells` is never edited.
+>
+> `install_ghostty = false` (or `--no-ghostty`, `DOTFILES_INSTALL_GHOSTTY=0`) skips only the
+> Ghostty installation. The `ghostty` config is still stowed, so installing Ghostty later needs no
+> further setup. The environment variable accepts `1`/`0`, `true`/`false` or `yes`/`no`.
 >
 > The grey inline suggestions (`autosuggestions`) and command colouring
 > (`syntax-highlighting`) exist only in zsh, so they stay off while bash is your login shell.
