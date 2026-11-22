@@ -75,7 +75,7 @@ exec $SHELL
 `bootstrap.sh`:
 
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
-2. installs dependencies, omnishell (upgrading it below 0.8.0) and Ghostty, and zsh if you opted in (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
+2. installs dependencies, omnishell (upgrading it below 0.8.0) and Ghostty, and zsh if you opted in, then offers to make zsh your login shell (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
 4. stows the packages
 5. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
@@ -83,7 +83,7 @@ exec $SHELL
 7. appends the `shell.d` block to both rc files
 8. renders the terminal colour themes
 
-It never runs `chsh`, and re-running it is safe. An existing handwritten
+It changes your login shell (`chsh`) only when you agree, and re-running it is safe. An existing handwritten
 `~/.zshrc` is moved to `~/.zshrc.pre-dotfiles` first. Pass `--yes` to answer every
 prompt with "yes" (and skip the identity prompt). `--yes` never installs zsh.
 
@@ -172,6 +172,7 @@ overwritten. Point `DOTFILES_CONFIG` at another path to use a different file.
 | Table / key                        | Values                          | Default | Command line                         | Environment             |
 |------------------------------------|---------------------------------|---------|--------------------------------------|-------------------------|
 | `[bootstrap]` `install_zsh`        | `"yes"` · `"no"` · `"ask"`      | `"ask"` | `--install-zsh` / `--no-install-zsh` | `DOTFILES_INSTALL_ZSH`  |
+| `[bootstrap]` `set_default_shell`  | `"yes"` · `"no"` · `"ask"`      | `"ask"` | `--set-default-shell` / `--no-set-default-shell` | `DOTFILES_SET_DEFAULT_SHELL` |
 | `[bootstrap]` `assume_yes`         | `true` · `false`                | `false` | `--yes`                              | `DOTFILES_ASSUME_YES`   |
 | `[bootstrap]` `terminals`          | list of package names           | `[]`    | -                                    | `DOTFILES_TERMINALS`    |
 | `[ghostty]` `keybinds`             | `"auto"` · `"mac"` · `"linux"`  | `"auto"`| -                                    | `DOTFILES_GHOSTTY_KEYBINDS` |
@@ -199,7 +200,16 @@ size = 10000
 > zsh is installed only on an **explicit "yes"**; `--yes` / `assume_yes` alone never
 > installs it. With `"ask"` (the default), `bootstrap.sh` prompts when a terminal is
 > available and otherwise prints a hint and carries on, so bash stays fully usable.
-> zsh is installed with `brew` or `apt-get`; `chsh` is never run.
+> zsh is installed with `brew` or `apt-get`.
+>
+> `set_default_shell` works the same way for the login shell. When zsh is installed and
+> is not your login shell, `"ask"` prompts to run `chsh -s`; `--yes` / `assume_yes` alone
+> never do. The change takes effect at your next login. If `chsh` cannot run (no
+> terminal, zsh missing from `/etc/shells`, `chsh` fails), `bootstrap.sh` prints the
+> command to run yourself and carries on. `/etc/shells` is never edited.
+>
+> The grey inline suggestions (`autosuggestions`) and command colouring
+> (`syntax-highlighting`) exist only in zsh, so they stay off while bash is your login shell.
 
 **omnishell.** `omnishell/config.toml` stays the tracked default. A table in your
 settings file replaces the whole table of the same name, so restate every key you
@@ -340,7 +350,8 @@ omnishell doctor     # check for drift / degraded modules
 
 | Module                                                            | What it does                                                                | Notable options                              |
 |-------------------------------------------------------------------|-----------------------------------------------------------------------------|----------------------------------------------|
-| `completion`, `history`, `autosuggestions`, `syntax-highlighting` | zsh/bash plugin baseline                                                    | `history.size = 50000`                       |
+| `completion`, `history`                                           | zsh/bash plugin baseline                                                    | `history.size = 50000`                       |
+| `autosuggestions`, `syntax-highlighting`                          | zsh only: grey inline suggestions, command colouring as you type            | -                                            |
 | `fzf`                                                             | key bindings + defaults                                                     | `ctrl_r`, `ctrl_t`, `default_opts`           |
 | `zoxide`                                                          | smarter `cd`                                                                | `cmd = "z"`                                  |
 | `modern-aliases`                                                  | `ls` / `cat` / `find` → `eza` / `bat` / `fd`                                | `replace = [...]`                            |
