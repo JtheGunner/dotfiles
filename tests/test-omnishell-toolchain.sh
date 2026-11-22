@@ -166,7 +166,17 @@ check "closing line counts the degraded modules" 'grep -q "done with 1 degraded 
 new_case apply-ok
 omnishell_apply_stub 0 "  applied  direnv"
 run_fn 'apply_omnishell; finish'
-check "clean apply ends with a plain done"      '[ "$RC" = 0 ] && grep -q "done\. Open a new shell" <<< "$OUT" && ! grep -q "degraded" <<< "$OUT"'
+check "clean apply ends with a plain done"      '[ "$RC" = 0 ] && grep -q "done\. Open a new shell" <<< "$OUT" && ! grep -q "degraded" <<< "$OUT" && grep -q "exec \$SHELL" <<< "$OUT"'
+
+new_case finish-chsh
+omnishell_apply_stub 0 "  applied  direnv"
+run_fn 'apply_omnishell; LOGIN_SHELL_CHANGED=1; finish'
+check "after chsh the closing line says exec zsh / log in again" 'grep -q "exec zsh, or log in again" <<< "$OUT" && ! grep -q "exec \$SHELL" <<< "$OUT"'
+
+new_case finish-chsh-degraded
+omnishell_apply_stub 1 "$DEGRADED_REPORT"
+run_fn 'apply_omnishell; LOGIN_SHELL_CHANGED=1; finish'
+check "degraded + chsh: exec zsh hint, degraded count kept" 'grep -q "done with 1 degraded module(s).*exec zsh, or log in again" <<< "$OUT" && ! grep -q "exec \$SHELL" <<< "$OUT"'
 
 new_case apply-broken
 omnishell_apply_stub 2 "error: bad config"

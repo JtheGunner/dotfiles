@@ -86,9 +86,15 @@ reset; with_zsh; with_chsh; printf 'y\n' > "$WORK/tty-yes"
 run "DOTFILES_TTY=$WORK/tty-yes" "$STUBS ensure_default_shell"
 check "answering yes runs chsh -s with the zsh path" '[ "$RC" = 0 ] && [ "$(cat "$CHSH_LOG")" = "-s $ZSH" ]'
 check "and says the change applies at the next login" 'said "next login"'
+run "DOTFILES_TTY=$WORK/tty-yes" "$STUBS ensure_default_shell; echo changed=\$LOGIN_SHELL_CHANGED"
+check "a successful chsh sets LOGIN_SHELL_CHANGED" 'said "changed=1"'
 reset; with_zsh; with_chsh; printf 'n\n' > "$WORK/tty-no"
-run "DOTFILES_TTY=$WORK/tty-no" "$STUBS ensure_default_shell"
+run "DOTFILES_TTY=$WORK/tty-no" "$STUBS ensure_default_shell; echo changed=\$LOGIN_SHELL_CHANGED"
 check "answering no does not run chsh" '[ "$RC" = 0 ] && ! called'
+check "and leaves LOGIN_SHELL_CHANGED at 0" 'said "changed=0"'
+reset; with_zsh; with_chsh 1; printf 'y\n' > "$WORK/tty-yes"
+run "DOTFILES_TTY=$WORK/tty-yes" "$STUBS ensure_default_shell; echo changed=\$LOGIN_SHELL_CHANGED"
+check "a failing chsh leaves LOGIN_SHELL_CHANGED at 0" 'said "changed=0"'
 
 echo ">> ask without an answer"
 reset; with_zsh; with_chsh
