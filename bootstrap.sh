@@ -13,7 +13,8 @@
 #
 # What it does (idempotent - safe to re-run):
 #   0. check that rc files + stow links all point at this checkout
-#   1. install dependencies + omnishell (>= 0.6.0, upgraded if older) + ghostty;
+#   1. install dependencies + omnishell (>= 0.6.0, upgraded if older) + ghostty,
+#      and offer to make zsh the login shell;
 #      on apt systems with a CPU omnishell has no release binaries for (not
 #      x86_64 / arm64) also a Rust toolchain for its git + cargo fallbacks
 #   2. write real ~/.zshrc + ~/.bashrc that source this repo's rc libraries
@@ -311,6 +312,59 @@ ensure_zsh() {
   esac
   log "installing zsh"
   _install_zsh_package || warn "zsh could not be installed - install it manually"
+}
+
+# --------------------------------------------------------------------------
+# 1a'. optional login shell change: when zsh is installed and is not the login
+#      shell, offer to run chsh. Mode (yes | no | ask): see _default_shell_mode.
+#      --yes never counts as a "yes"; every failure only warns.
+# --------------------------------------------------------------------------
+# path of the current login shell (empty when it cannot be determined)
+_login_shell() {
+  local user shell=""
+  user="$(id -un)"
+  case "$OS" in
+    Darwin) shell="$(dscl . -read "/Users/$user" UserShell 2>/dev/null | awk '{ print $2 }')" || true ;;
+    *) shell="$(getent passwd "$user" 2>/dev/null | awk -F: '{ print $7 }')" || true ;;
+  esac
+  printf '%s' "${shell:-${SHELL:-}}"
+}
+
+_shell_listed() { grep -qxF "$1" /etc/shells 2>/dev/null; }
+
+_default_shell_hint() {
+  warn "zsh is not your login shell ($1) - run 'chsh -s $2' to make it the default"
+}
+
+ensure_default_shell() {
+  local zsh_path current
+  zsh_path="$(command -v zsh 2>/dev/null)" || return 0
+  current="$(_login_shell)"
+  case "${current##*/}" in zsh | "") return 0 ;; esac
+  case "$(_default_shell_mode)" in
+    no) return 0 ;;
+    ask)
+      # --yes is not a "yes" for the login shell: only an explicit setting or answer changes it
+      if [ "${ASSUME_YES:-0}" = "1" ] || ! _confirm "zsh is not your login shell - make it the default?"; then
+        _default_shell_hint "not requested" "$zsh_path"
+        return 0
+      fi ;;
+  esac
+  if ! _shell_listed "$zsh_path"; then
+    warn "$zsh_path is not listed in /etc/shells, so chsh would refuse it"
+    warn "  add it first ('echo $zsh_path | sudo tee -a /etc/shells'), then run 'chsh -s $zsh_path'"
+    return 0
+  fi
+  if ! interactive_tty || ! command -v chsh >/dev/null 2>&1; then
+    _default_shell_hint "chsh needs a terminal and the chsh command" "$zsh_path"
+    return 0
+  fi
+  log "making zsh your login shell"
+  if chsh -s "$zsh_path"; then
+    log "zsh is now your login shell - it takes effect at your next login"
+  else
+    _default_shell_hint "chsh failed" "$zsh_path"
+  fi
 }
 
 # --------------------------------------------------------------------------
@@ -1233,6 +1287,7 @@ main() {
   interactive_settings
   install_deps
   ensure_zsh
+  ensure_default_shell
   install_ghostty
   install_omnishell
   interactive_modules
