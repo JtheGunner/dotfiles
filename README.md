@@ -105,6 +105,14 @@ but the tools installed so far remain.
 > the rc files or stow links point at a *different* checkout, it asks once before
 > switching everything over.
 
+> [!NOTE]
+> On Debian / Ubuntu, omnishell installs some packages (for example `bat` and
+> `fd-find`) with `sudo apt-get`. Run `bootstrap.sh` from an interactive terminal
+> so `sudo` can ask for your password. Without a terminal and without
+> passwordless `sudo`, the install fails, the affected module (here
+> `modern-aliases`) is reported as degraded, and the run continues. Fix the
+> cause (or install the packages yourself) and re-run `./bootstrap.sh`.
+
 ### Multiple checkouts
 
 Several clones on one machine are fine, e.g. a working copy to hack on and a
