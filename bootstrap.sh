@@ -143,11 +143,13 @@ reload_settings() {
 # starship and broot from an upstream release binary on Linux x86_64 / arm64
 # instead of a cargo build; 0.6.0 is the first release that installs on 32-bit
 # ARM, with release binaries for starship and mise (armv7) there; 0.7.0 adds
-# `omnishell tui`, which --interactive hands the module selection to. What has no
+# `omnishell tui`, which --interactive hands the module selection to; 0.7.1 puts
+# its vendor/bin on PATH, without which a release binary or source build is not
+# found at shell start (no starship prompt, no mise / broot). What has no
 # binary (broot on 32-bit ARM, mise on armv6, everything on other CPUs) still
 # builds from source, which needs Rust 1.95 for mise / starship (broot: 1.85) -
 # newer than what Debian / Ubuntu LTS ship as `cargo`.
-OMNISHELL_MIN_VERSION="0.7.0"
+OMNISHELL_MIN_VERSION="0.7.1"
 RUST_MIN_VERSION="1.95"
 
 # What a cargo build of mise needs besides Rust: a C toolchain, cmake (libz-ng-sys),
