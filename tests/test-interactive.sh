@@ -55,14 +55,14 @@ empties() { local i; for ((i = 0; i < $1; i++)); do printf '\\n'; done; }
 
 echo ">> prompts: Enter keeps everything"
 fresh
-ix_run "$(empties 20)" 'interactive_settings; echo AFTER'
+ix_run "$(empties 21)" 'interactive_settings; echo AFTER'
 check "Enter at every prompt leaves the file byte-identical" 'cmp -s "$CONF" "$DOTFILES/config.toml.example"'
 check "no backup is made and the run continues"             '[ ! -e "$CONF.bak" ] && grep -q AFTER <<< "$OUT"'
 check "the prompts show table.key and unset"                'grep -q "bootstrap.install_zsh" <<< "$OUT" && grep -q "\[unset\]" <<< "$OUT"'
 
 echo ">> prompts: answers are validated and written"
 fresh
-ix_run "yes\n\nfoot, kitty\nbogus\nlinux\n$(empties 16)y\n" 'interactive_settings; printf "%s|%s" "$CONF_INSTALL_ZSH" "$CONF_TERMINALS"'
+ix_run "yes\n\n\nfoot, kitty\nbogus\nlinux\n$(empties 16)y\n" 'interactive_settings; printf "%s|%s" "$CONF_INSTALL_ZSH" "$CONF_TERMINALS"'
 check "the run succeeds and reloads the settings"           '[ "$RC" = 0 ] && grep -q "yes|foot kitty\$" <<< "$OUT"'
 check "install_zsh is written"                              'grep -qx "install_zsh = \"yes\"" "$CONF"'
 check "the list is written"                                 'grep -qx "terminals = \[\"foot\", \"kitty\"\]" "$CONF"'
@@ -74,12 +74,12 @@ check "the template comments are still there"               'grep -q "^# Install
 echo ">> prompts: a dash clears a key"
 fresh
 printf '[bootstrap]\ninstall_zsh = "yes"\n# note\n' > "$CONF"
-ix_run "-\n$(empties 19)y\n" 'interactive_settings'
+ix_run "-\n$(empties 20)y\n" 'interactive_settings'
 check "the key is gone and the rest stays"                  '! grep -q install_zsh "$CONF" && grep -qx "# note" "$CONF" && grep -qx "\[bootstrap\]" "$CONF"'
 
 echo ">> review: declining and end of input"
 fresh
-ix_run "yes\n$(empties 19)n\n" 'interactive_settings; echo AFTER'
+ix_run "yes\n$(empties 20)n\n" 'interactive_settings; echo AFTER'
 check "n ends the run with exit 0"                          '[ "$RC" = 0 ] && ! grep -q AFTER <<< "$OUT" && grep -q "nothing written" <<< "$OUT"'
 check "n leaves the file untouched"                         'cmp -s "$CONF" "$DOTFILES/config.toml.example" && [ ! -e "$CONF.bak" ]'
 check "the diff was shown"                                  'grep -q "^+install_zsh = \"yes\"" <<< "$OUT"'
@@ -148,28 +148,28 @@ check "the README tells both n cases apart"                    'grep -q "setting
 
 echo ">> hardening: temp files, atomic write, one backup"
 fresh
-ix_run "yes\n$(empties 19)" 'interactive_settings'
+ix_run "yes\n$(empties 20)" 'interactive_settings'
 check "end of input at the settings review leaves no temp file" '[ "$RC" = 1 ] && [ -z "$(ls -A "$WORK/tmp")" ]'
 fresh
 printf 'printf "\\n[modules.testmod]\\nenabled = true\\n" >> "%s"\n' "$LIVE" > "$WORK/tui.sh"
 ix_run "" 'interactive_modules'
 check "end of input at the module review leaves no temp file"   '[ "$RC" = 1 ] && [ -z "$(ls -A "$WORK/tmp")" ]'
 fresh
-ix_run "yes\n$(empties 19)n\n" 'interactive_settings'
+ix_run "yes\n$(empties 20)n\n" 'interactive_settings'
 check "declining leaves no temp file either"                    '[ "$RC" = 0 ] && [ -z "$(ls -A "$WORK/tmp")" ]'
 fresh; chmod 644 "$CONF"
-ix_run "yes\n$(empties 19)y\n" 'interactive_settings'
+ix_run "yes\n$(empties 20)y\n" 'interactive_settings'
 check "the write leaves no staging file next to the settings file" '[ "$(ls "$WORK/cfg" | tr "\n" " ")" = "config.toml config.toml.bak " ]'
 check "and keeps the file mode"                                 '[ "$(ls -l "$CONF" | cut -c1-10)" = "-rw-r--r--" ]'
 fresh
-ix_run "yes\n$(empties 19)y\ny\n" 'interactive_settings; interactive_modules'
+ix_run "yes\n$(empties 20)y\ny\n" 'interactive_settings; interactive_modules'
 check "both steps write: both changes are in the file"          'grep -qx "install_zsh = \"yes\"" "$CONF" && grep -qx "\[modules.testmod\]" "$CONF"'
 check "and the .bak still holds the original"                   'cmp -s "$CONF.bak" "$DOTFILES/config.toml.example"'
 
 echo ">> review fixes: a symlinked settings file"
 fresh
 mkdir -p "$WORK/priv"; mv "$CONF" "$WORK/priv/config.toml"; ln -s "$WORK/priv/config.toml" "$CONF"
-ix_run "yes\n$(empties 19)y\n" 'interactive_settings'
+ix_run "yes\n$(empties 20)y\n" 'interactive_settings'
 check "the symlink is still a symlink"                          '[ -L "$CONF" ]'
 check "the content went to the file it points at"               'grep -qx "install_zsh = \"yes\"" "$WORK/priv/config.toml"'
 check "no staging file is left next to the target"              '[ "$(ls "$WORK/priv" | tr "\n" " ")" = "config.toml " ]'
@@ -203,7 +203,7 @@ check "the same probe sees the four traps once they are set" '[ "$OUT" = 4 ]'
 echo ">> a settings directory that is not writable"
 if [ "$(id -u)" -ne 0 ]; then
   fresh; chmod a-w "$WORK/cfg"
-  ix_run "yes\n$(empties 19)y\n" 'interactive_settings'
+  ix_run "yes\n$(empties 20)y\n" 'interactive_settings'
   chmod u+w "$WORK/cfg"
   check "the write fails and the message names the directory"   '[ "$RC" = 1 ] && grep -q "must be writable" "$WORK/err" && grep -qF "$WORK/cfg" "$WORK/err"'
   check "the settings file is untouched"                        'cmp -s "$CONF" "$DOTFILES/config.toml.example"'
@@ -214,7 +214,7 @@ echo ">> review fixes: a read-only target behind a symlink, a failed write at th
 if [ "$(id -u)" -ne 0 ]; then
   fresh; mkdir -p "$WORK/priv"; mv "$CONF" "$WORK/priv/config.toml"; ln -s "$WORK/priv/config.toml" "$CONF"
   printf 'OLD\n' > "$CONF.bak"; chmod a-w "$WORK/priv"
-  ix_run "yes\n$(empties 19)y\n" 'interactive_settings'
+  ix_run "yes\n$(empties 20)y\n" 'interactive_settings'
   chmod u+w "$WORK/priv"
   check "the message names the directory of the real file"       '[ "$RC" = 1 ] && grep -qE "directory [^ ]*/priv must be writable" "$WORK/err"'
   check "an existing backup survives a failed write"             '[ "$(cat "$CONF.bak")" = OLD ]'

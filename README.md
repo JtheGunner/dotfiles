@@ -159,6 +159,7 @@ overwritten. Point `DOTFILES_CONFIG` at another path to use a different file.
 | Table / key                        | Values                          | Default | Command line                         | Environment             |
 |------------------------------------|---------------------------------|---------|--------------------------------------|-------------------------|
 | `[bootstrap]` `install_zsh`        | `"yes"` · `"no"` · `"ask"`      | `"ask"` | `--install-zsh` / `--no-install-zsh` | `DOTFILES_INSTALL_ZSH`  |
+| `[bootstrap]` `set_default_shell`  | `"yes"` · `"no"` · `"ask"`      | `"ask"` | `--set-default-shell` / `--no-set-default-shell` | `DOTFILES_SET_DEFAULT_SHELL` |
 | `[bootstrap]` `assume_yes`         | `true` · `false`                | `false` | `--yes`                              | `DOTFILES_ASSUME_YES`   |
 | `[bootstrap]` `terminals`          | list of package names           | `[]`    | -                                    | `DOTFILES_TERMINALS`    |
 | `[ghostty]` `keybinds`             | `"auto"` · `"mac"` · `"linux"`  | `"auto"`| -                                    | `DOTFILES_GHOSTTY_KEYBINDS` |

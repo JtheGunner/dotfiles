@@ -3,6 +3,7 @@
 #
 #   git clone https://github.com/JtheGunner/dotfiles ~/.dotfiles
 #   ~/.dotfiles/bootstrap.sh [--yes] [--install-zsh | --no-install-zsh]
+#                            [--set-default-shell | --no-set-default-shell]
 #
 # Run it from whichever checkout you want to be live - it installs from there.
 # Before changing anything it checks every reference to a checkout (the DOTFILES=
@@ -28,8 +29,10 @@
 # zsh is installed only on an explicit "yes" (--install-zsh, DOTFILES_INSTALL_ZSH=yes
 # or install_zsh = "yes" in ~/.config/dotfiles/config.toml) - never by --yes alone.
 #
-# It never runs `chsh`: whatever your current login shell is (bash or zsh) is
-# what gets configured.
+# The login shell is changed (chsh) only on an explicit "yes" (--set-default-shell,
+# DOTFILES_SET_DEFAULT_SHELL=yes or set_default_shell = "yes") or an interactive
+# answer - never by --yes alone. Otherwise whatever your current login shell is
+# (bash or zsh) is what gets configured.
 set -euo pipefail
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -42,6 +45,7 @@ warn() { printf '\033[1;33m warn:\033[0m %s\n' "$*" >&2; }
 # and the settings file. Parsed before anything is migrated or written, so --help
 # and a mistyped flag change nothing.
 INSTALL_ZSH_FLAG=""
+SET_DEFAULT_SHELL_FLAG=""
 ASSUME_YES_FLAG=""
 INTERACTIVE_FLAG=""
 parse_args() {
@@ -52,13 +56,18 @@ parse_args() {
       --interactive) INTERACTIVE_FLAG=1 ;;
       --install-zsh) INSTALL_ZSH_FLAG=yes ;;
       --no-install-zsh) INSTALL_ZSH_FLAG=no ;;
+      --set-default-shell) SET_DEFAULT_SHELL_FLAG=yes ;;
+      --no-set-default-shell) SET_DEFAULT_SHELL_FLAG=no ;;
       -h | --help)
         cat <<USAGE
 usage: $(basename "$0") [--interactive] [--yes] [--install-zsh | --no-install-zsh]
+                    [--set-default-shell | --no-set-default-shell]
   --yes             assume "yes" for all prompts (switch rc files + stow links from another checkout to this one);
-                    does NOT install zsh
+                    does NOT install zsh or change the login shell
   --install-zsh     install zsh if it is missing, without asking
   --no-install-zsh  never install zsh
+  --set-default-shell     make zsh the login shell (chsh) if it is not, without asking
+  --no-set-default-shell  never change the login shell
   --interactive     ask for the settings and pick the omnishell modules in its TUI; writes them to the
                     settings file after showing a diff (needs a terminal, cannot be combined with --yes)
 USAGE
@@ -83,6 +92,7 @@ settings_migrate_legacy "$(dirname "$BOOTSTRAP_CONFIG")/bootstrap.conf" "$BOOTST
 settings_load "$BOOTSTRAP_CONFIG"
 read_conf_values() {
   CONF_INSTALL_ZSH="$(settings_get bootstrap.install_zsh)"
+  CONF_SET_DEFAULT_SHELL="$(settings_get bootstrap.set_default_shell)"
   CONF_ASSUME_YES="$(settings_get bootstrap.assume_yes)"
   CONF_TERMINALS="$(settings_get bootstrap.terminals)"
   CONF_GHOSTTY_KEYBINDS="$(settings_get ghostty.keybinds)"
@@ -257,6 +267,20 @@ _install_zsh_mode() {
     esac
   fi
   printf '%s' "${mode:-${CONF_INSTALL_ZSH:-ask}}"
+}
+
+# Mode (yes | no | ask) for making zsh the login shell, highest precedence first:
+# --set-default-shell / --no-set-default-shell, DOTFILES_SET_DEFAULT_SHELL,
+# set_default_shell in the settings file, default ask.
+_default_shell_mode() {
+  local mode="$SET_DEFAULT_SHELL_FLAG"
+  if [ -z "$mode" ] && [ -n "${DOTFILES_SET_DEFAULT_SHELL:-}" ]; then
+    case "$DOTFILES_SET_DEFAULT_SHELL" in
+      yes | no | ask) mode="$DOTFILES_SET_DEFAULT_SHELL" ;;
+      *) warn "invalid DOTFILES_SET_DEFAULT_SHELL value '$DOTFILES_SET_DEFAULT_SHELL' (use yes, no or ask) - ignored" ;;
+    esac
+  fi
+  printf '%s' "${mode:-${CONF_SET_DEFAULT_SHELL:-ask}}"
 }
 
 _install_zsh_package() {

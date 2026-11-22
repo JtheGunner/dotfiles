@@ -112,6 +112,7 @@ settings_parse() {
 #   enum:a,b,c | bool | list | string | number | positive (> 0) | fraction (0 to 1)
 #   | nonneg (integer >= 0) | posint (integer > 0) | tmuxkey | email
 SETTINGS_SCHEMA='bootstrap.install_zsh enum:yes,no,ask
+bootstrap.set_default_shell enum:yes,no,ask
 bootstrap.assume_yes bool
 bootstrap.terminals list
 ghostty.keybinds enum:auto,mac,linux

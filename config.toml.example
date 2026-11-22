@@ -23,6 +23,13 @@
 # Flags: --install-zsh / --no-install-zsh    Environment: DOTFILES_INSTALL_ZSH
 #install_zsh = "ask"
 #
+# Make zsh the login shell (chsh) when it is installed and is not the login shell:
+# "yes", "no" or "ask". Only an explicit "yes" changes it without asking; --yes alone
+# never does. "ask" prompts when a terminal is available and otherwise prints a hint.
+# The change takes effect at the next login.
+# Flags: --set-default-shell / --no-set-default-shell    Environment: DOTFILES_SET_DEFAULT_SHELL
+#set_default_shell = "ask"
+#
 # Answer "yes" to every prompt, e.g. switch rc files and stow links from another
 # checkout to this one.
 # Flag: --yes    Environment: DOTFILES_ASSUME_YES (1 or 0)

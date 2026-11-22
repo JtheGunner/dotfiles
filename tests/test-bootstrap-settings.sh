@@ -65,6 +65,23 @@ check "DOTFILES_INSTALL_ZSH beats the file"         '[ "$OUT" = no ]'
 sh_run 'DOTFILES_INSTALL_ZSH=bogus' '_install_zsh_mode'
 check "an invalid env value warns and falls back to the file" '[ "$OUT" = yes ] && grep -q "DOTFILES_INSTALL_ZSH" "$WORK/err"'
 
+fresh
+sh_run '' '_default_shell_mode'
+check "set_default_shell defaults to ask"            '[ "$OUT" = ask ]'
+fresh; conf '[bootstrap]' 'set_default_shell = "yes"'
+sh_run '' '_default_shell_mode'
+check "set_default_shell comes from the file"        '[ "$OUT" = yes ]'
+sh_run 'DOTFILES_SET_DEFAULT_SHELL=no' '_default_shell_mode'
+check "DOTFILES_SET_DEFAULT_SHELL beats the file"    '[ "$OUT" = no ]'
+sh_run 'DOTFILES_SET_DEFAULT_SHELL=bogus' '_default_shell_mode'
+check "an invalid env value warns and falls back to the file" '[ "$OUT" = yes ] && grep -q "DOTFILES_SET_DEFAULT_SHELL" "$WORK/err"'
+sh_run 'DOTFILES_SET_DEFAULT_SHELL=yes' 'SET_DEFAULT_SHELL_FLAG=no; _default_shell_mode'
+check "the flag beats the environment"               '[ "$OUT" = no ]'
+sh_run '' 'parse_args --set-default-shell; printf %s "$SET_DEFAULT_SHELL_FLAG"'
+check "--set-default-shell sets the flag to yes"     '[ "$OUT" = yes ]'
+sh_run '' 'parse_args --no-set-default-shell; printf %s "$SET_DEFAULT_SHELL_FLAG"'
+check "--no-set-default-shell sets the flag to no"   '[ "$OUT" = no ]'
+
 echo ">> seeding"
 fresh; rm -rf "$WORK/cfg"
 sh_run '' 'seed_bootstrap_config'
