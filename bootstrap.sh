@@ -373,12 +373,36 @@ ensure_default_shell() {
 # --------------------------------------------------------------------------
 # 1b. omnishell + ghostty
 # --------------------------------------------------------------------------
-# Ubuntu/Debian have no official ghostty package; use the community .deb from
-# github.com/mkasberg/ghostty-ubuntu (the standard route for Ubuntu).
+# Ubuntu has no official ghostty package; use the community .deb from
+# github.com/mkasberg/ghostty-ubuntu. It is built for Ubuntu only, so other
+# distributions (Debian, ...) skip it.
+#
+# The os-release file defaults to /etc/os-release; DOTFILES_OS_RELEASE overrides
+# it (tests).
+_os_release_file() { echo "${DOTFILES_OS_RELEASE:-/etc/os-release}"; }
+
+# Print "<ID>|<ID_LIKE>|<PRETTY_NAME>" from the os-release file (empty fields when missing).
+_os_release_fields() {
+  ( ID="" ID_LIKE="" PRETTY_NAME=""
+    # shellcheck disable=SC1090
+    . "$(_os_release_file)" 2>/dev/null
+    echo "${ID:-}|${ID_LIKE:-}|${PRETTY_NAME:-}" )
+}
+
+# True on Ubuntu and its derivatives (Mint, Pop!_OS, ...): ID=ubuntu or "ubuntu" in ID_LIKE.
+_is_ubuntu_like() {
+  local id like _
+  IFS='|' read -r id like _ <<<"$(_os_release_fields)"
+  [ "$id" = ubuntu ] && return 0
+  case " $like " in *" ubuntu "*) return 0 ;; esac
+  return 1
+}
+
 _install_ghostty_deb() {
   command -v curl >/dev/null 2>&1 || return 1
   local ver arch url tmp rc
-  ver="$(. /etc/os-release 2>/dev/null && echo "${VERSION_ID:-}")"
+  # shellcheck disable=SC1090
+  ver="$(. "$(_os_release_file)" 2>/dev/null && echo "${VERSION_ID:-}")"
   arch="$(dpkg --print-architecture 2>/dev/null)"
   [ -n "$ver" ] && [ -n "$arch" ] || return 1
   url="$(curl -fsSL https://api.github.com/repos/mkasberg/ghostty-ubuntu/releases/latest \
@@ -403,6 +427,10 @@ install_ghostty() {
   elif command -v apt-get >/dev/null 2>&1 && apt-cache show ghostty >/dev/null 2>&1; then
     log "installing ghostty (apt)"
     $SUDO apt-get install -y -qq ghostty || warn "ghostty apt install failed"
+  elif command -v dpkg >/dev/null 2>&1 && ! _is_ubuntu_like; then
+    local name
+    name="$(_os_release_fields | cut -d'|' -f3)"
+    warn "no ghostty package for ${name:-this distribution}; install it manually: https://ghostty.org/download (config is already stowed)"
   elif command -v dpkg >/dev/null 2>&1; then
     log "installing ghostty (mkasberg/ghostty-ubuntu .deb)"
     _install_ghostty_deb || warn "ghostty install failed - get it at https://ghostty.org/download"
