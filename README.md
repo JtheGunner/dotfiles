@@ -29,11 +29,13 @@ nothing is configured twice:
 | **`~/.zshrc.local` / `~/.bashrc.local`**                 | machine-specific and secret: per-host `PATH`, tool completions, tokens. **Not version-controlled.**                                                                                                                                              | sourced last by the same marker block                                                                     |
 
 omnishell is consumed as a released binary (Homebrew tap / curl installer); this
-repo never modifies it. **omnishell 0.7.0 or newer is required**: older releases
+repo never modifies it. **omnishell 0.7.1 or newer is required**: older releases
 don't know all of the `starship`, `root-loops`, `tmux`, `broot`, `direnv`, `mise` and
 `colorized-man` modules, and install `mise`, `starship` and `broot` with a long
-source build where no distro package exists, and 0.7.0 is the first with
-`omnishell tui`, which `--interactive` uses. `bootstrap.sh` upgrades an older
+source build where no distro package exists, 0.7.0 is the first with
+`omnishell tui`, which `--interactive` uses, and before 0.7.1 a tool installed
+from a release binary or a source build is not on `PATH` at shell start (no
+`starship` prompt). `bootstrap.sh` upgrades an older
 install, or stops with a message if it can't.
 
 ```text
@@ -72,7 +74,7 @@ exec $SHELL
 `bootstrap.sh`:
 
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
-2. installs dependencies, omnishell (upgrading it below 0.7.0) and Ghostty, and zsh if you opted in (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
+2. installs dependencies, omnishell (upgrading it below 0.7.1) and Ghostty, and zsh if you opted in (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
 4. stows the packages
 5. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
