@@ -204,7 +204,9 @@ size = 10000
 >
 > `set_default_shell` works the same way for the login shell. When zsh is installed and
 > is not your login shell, `"ask"` prompts to run `chsh -s`; `--yes` / `assume_yes` alone
-> never do. The change takes effect at your next login. If `chsh` cannot run (no
+> never do. The change takes effect at your next login; when `chsh` succeeds, the closing
+> hint of `bootstrap.sh` says `exec zsh` (or log in again) instead of `exec $SHELL`, because
+> `$SHELL` of the running session is still the old login shell. If `chsh` cannot run (no
 > terminal, zsh missing from `/etc/shells`, `chsh` fails), `bootstrap.sh` prints the
 > command to run yourself and carries on. `/etc/shells` is never edited.
 >

@@ -172,6 +172,8 @@ APT_BUILD_DEPS=(build-essential cmake pkg-config libssl-dev)
 
 # output of the last `omnishell apply`, for the degraded-module summary at the end
 APPLY_REPORT=""
+# set to 1 when this run changed the login shell to zsh (read by finish)
+LOGIN_SHELL_CHANGED=0
 
 
 # true when dotted version $1 >= $2: numeric per field, missing fields count as 0,
@@ -361,6 +363,7 @@ ensure_default_shell() {
   fi
   log "making zsh your login shell"
   if chsh -s "$zsh_path"; then
+    LOGIN_SHELL_CHANGED=1
     log "zsh is now your login shell - it takes effect at your next login"
   else
     _default_shell_hint "chsh failed" "$zsh_path"
@@ -1032,10 +1035,13 @@ finish() {
   local degraded
   degraded="$(_degraded_count "$APPLY_REPORT")"
   _degraded_summary "$APPLY_REPORT"
+  # $SHELL of this session is still the old login shell, so exec $SHELL would not switch to zsh
+  local reload='exec $SHELL'
+  [ "$LOGIN_SHELL_CHANGED" = 1 ] && reload='exec zsh, or log in again'
   if [ "$degraded" -gt 0 ]; then
-    log "done with $degraded degraded module(s). Open a new shell (exec \$SHELL) to pick up the rest."
+    log "done with $degraded degraded module(s). Open a new shell ($reload) to pick up the rest."
   else
-    log "done. Open a new shell (exec \$SHELL) to pick everything up."
+    log "done. Open a new shell ($reload) to pick everything up."
   fi
 }
 
