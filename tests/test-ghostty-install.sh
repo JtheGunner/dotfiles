@@ -31,7 +31,7 @@ run() {
 }
 # release <content>: write an os-release file and run against it
 release() { printf '%s\n' "$1" > "$WORK/os-release"; run "$WORK/os-release"; }
-said() { cat "$WORK/out" "$WORK/err" | grep -q -- "$1"; }
+said() { grep -q -- "$1" "$WORK/out" "$WORK/err"; }
 
 echo ">> Ubuntu"
 release $'ID=ubuntu\nID_LIKE=debian\nVERSION_ID="24.04"\nPRETTY_NAME="Ubuntu 24.04 LTS"'

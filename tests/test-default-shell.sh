@@ -27,7 +27,7 @@ ZSH="$WORK/bin/zsh"
 with_zsh()  { printf '#!/bin/sh\n' > "$ZSH"; chmod +x "$ZSH"; }
 with_chsh() { printf '#!/bin/sh\necho "$@" >> "%s"\nexit %s\n' "$CHSH_LOG" "${1:-0}" > "$WORK/bin/chsh"; chmod +x "$WORK/bin/chsh"; }
 called()    { [ -s "$CHSH_LOG" ]; }
-said()      { cat "$WORK/out" "$WORK/err" | grep -q -- "$1"; }
+said()      { grep -q -- "$1" "$WORK/out" "$WORK/err"; }
 
 # one fresh scenario: no zsh, no chsh, empty log, no settings file, no tty answers
 reset() {
