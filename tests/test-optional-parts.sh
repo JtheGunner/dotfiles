@@ -192,5 +192,36 @@ check "skip tmux drops render_tmux_settings only" '[ "$(grep -c "^call:" <<<"$OU
 main_run '"ghostty"'
 check "skip ghostty drops keybinds and settings but keeps install_ghostty" '[ "$(grep -c "^call:" <<<"$OUT")" = 21 ] && ! grep -qE "^call:(setup_ghostty_keybinds|render_ghostty_settings)$" <<<"$OUT" && grep -q "^call:install_ghostty$" <<<"$OUT"'
 
+echo ">> warn when a skipped package is still used by an enabled module"
+# the warning goes to stderr; sh_run keeps it in $WORK/err
+warn_run() { sh_run '' 'warn_skipped_packages_needed_by_modules'; }
+fresh; conf '[bootstrap]' 'skip_packages = ["fzf"]'
+warn_run
+check "skipping fzf names the enabled fzf module" 'grep -q "skipped package fzf is still used by the enabled omnishell module fzf; disable the module in \[modules.fzf\] or install fzf yourself" "$WORK/err"'
+
+fresh; conf '[bootstrap]' 'skip_packages = ["fzf"]' '[modules.fzf]' 'enabled = false'
+warn_run
+check "disabling the module in the settings file removes the warning" '[ ! -s "$WORK/err" ] && [ -z "$OUT" ]'
+
+fresh; conf '[bootstrap]' 'skip_packages = ["git-delta", "ripgrep"]'
+warn_run
+check "packages without a module never warn" '[ ! -s "$WORK/err" ]'
+
+fresh; conf '[bootstrap]' 'skip_packages = ["bat"]'
+warn_run
+check "bat warns once and names the first enabled module" '[ "$(grep -c "skipped package bat" "$WORK/err")" = 1 ] && grep -q "enabled omnishell module colorized-man; disable the module in \[modules.colorized-man\]" "$WORK/err"'
+
+fresh; conf '[bootstrap]' 'skip_packages = ["bat"]' '[modules.colorized-man]' 'enabled = false'
+warn_run
+check "bat falls through to the next enabled module" 'grep -q "enabled omnishell module modern-aliases" "$WORK/err"'
+
+fresh; conf '[bootstrap]' 'skip_packages = ["fd"]'
+warn_run
+check "fd maps to modern-aliases" 'grep -q "skipped package fd is still used by the enabled omnishell module modern-aliases" "$WORK/err"'
+
+fresh; : > "$CONF"
+warn_run
+check "no skip list prints nothing" '[ ! -s "$WORK/err" ] && [ -z "$OUT" ]'
+
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

@@ -1112,8 +1112,51 @@ prepare_omnishell_config() {
   _write_omnishell_config
 }
 
+# the omnishell modules that use a skippable package; a package without one
+# (ripgrep, git-delta) prints nothing
+_modules_using_package() {
+  case "$1" in
+    fzf) echo "fzf" ;;
+    zoxide) echo "zoxide" ;;
+    bat) echo "colorized-man modern-aliases" ;;
+    fd) echo "modern-aliases" ;;
+  esac
+}
+
+# the names of the modules the merged omnishell config enables, space separated
+_enabled_omnishell_modules() {
+  settings_merge_omnishell "$DOTFILES/omnishell/config.toml" | awk '
+    /^[[:space:]]*\[/ {
+      name = ""
+      if (match($0, /^[[:space:]]*\[modules\.[^].]+\]/)) {
+        name = substr($0, RSTART, RLENGTH)
+        sub(/^[[:space:]]*\[modules\./, "", name)
+        sub(/\]$/, "", name)
+      }
+      next
+    }
+    name != "" && /^[[:space:]]*enabled[[:space:]]*=[[:space:]]*true([[:space:]]|#|$)/ { printf "%s ", name }
+  '
+}
+
+# warn once per skipped package that an enabled omnishell module still uses
+warn_skipped_packages_needed_by_modules() {
+  local skipped package module enabled
+  skipped="$(skipped_packages)"
+  [ -n "$skipped" ] || return 0
+  enabled="$(_enabled_omnishell_modules)"
+  for package in $skipped; do
+    for module in $(_modules_using_package "$package"); do
+      _is_in_list "$module" "$enabled" || continue
+      warn "skipped package $package is still used by the enabled omnishell module $module; disable the module in [modules.$module] or install $package yourself"
+      break
+    done
+  done
+}
+
 apply_omnishell() {
   prepare_omnishell_config
+  warn_skipped_packages_needed_by_modules
   log "omnishell init + apply"
   omnishell init -y 2>/dev/null || omnishell init || true
   _write_omnishell_config   # init may template a fresh one
