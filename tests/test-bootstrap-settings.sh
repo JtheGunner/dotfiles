@@ -115,6 +115,10 @@ fresh; conf '[bootstrap]' 'install_ghostty = false'
 sh_run '' 'printf "%s " "${PACKAGES[@]}"'
 check "the ghostty stow package stays when the install is off" 'grep -qw ghostty <<< "$OUT"'
 
+fresh; conf '[bootstrap]' 'skip_packages = ["fzf", "bat"]' 'skip_stow = ["tmux"]' 'terminal_app_profile = false'
+sh_run '' 'printf "%s|%s|%s" "$CONF_SKIP_PACKAGES" "$CONF_SKIP_STOW" "$CONF_TERMINAL_APP_PROFILE"'
+check "the new keys load from the file" '[ "$OUT" = "fzf bat|tmux|false" ]'
+
 echo ">> seeding"
 fresh; rm -rf "$WORK/cfg"
 sh_run '' 'seed_bootstrap_config'

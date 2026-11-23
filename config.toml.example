@@ -36,6 +36,22 @@
 # Flags: --ghostty / --no-ghostty    Environment: DOTFILES_INSTALL_GHOSTTY (1/0, true/false, yes/no)
 #install_ghostty = true
 #
+# Base packages to leave out, by name. Names that are not part of the base package
+# list are reported and ignored. stow, omnishell, curl and ca-certificates cannot be
+# skipped.
+# Environment: DOTFILES_SKIP_PACKAGES (space-separated)
+#skip_packages = []
+#
+# Stow packages to leave unlinked, by name (for example "tmux"). The zsh package
+# cannot be skipped, and stow itself is always required.
+# Environment: DOTFILES_SKIP_STOW (space-separated)
+#skip_stow = []
+#
+# Apply the macOS Terminal.app profile: true or false. false leaves Terminal.app
+# untouched.
+# Environment: DOTFILES_TERMINAL_APP_PROFILE (1/0, true/false, yes/no)
+#terminal_app_profile = true
+#
 # Answer "yes" to every prompt, e.g. switch rc files and stow links from another
 # checkout to this one.
 # Flag: --yes    Environment: DOTFILES_ASSUME_YES (1 or 0)

@@ -104,6 +104,12 @@ read_conf_values() {
   CONF_INSTALL_ZSH="$(settings_get bootstrap.install_zsh)"
   CONF_SET_DEFAULT_SHELL="$(settings_get bootstrap.set_default_shell)"
   CONF_INSTALL_GHOSTTY="$(settings_get bootstrap.install_ghostty)"
+  # shellcheck disable=SC2034  # read by later steps
+  CONF_SKIP_PACKAGES="$(settings_get bootstrap.skip_packages)"
+  # shellcheck disable=SC2034  # read by later steps
+  CONF_SKIP_STOW="$(settings_get bootstrap.skip_stow)"
+  # shellcheck disable=SC2034  # read by later steps
+  CONF_TERMINAL_APP_PROFILE="$(settings_get bootstrap.terminal_app_profile)"
   CONF_ASSUME_YES="$(settings_get bootstrap.assume_yes)"
   CONF_TERMINALS="$(settings_get bootstrap.terminals)"
   CONF_GHOSTTY_KEYBINDS="$(settings_get ghostty.keybinds)"
