@@ -104,9 +104,7 @@ read_conf_values() {
   CONF_INSTALL_ZSH="$(settings_get bootstrap.install_zsh)"
   CONF_SET_DEFAULT_SHELL="$(settings_get bootstrap.set_default_shell)"
   CONF_INSTALL_GHOSTTY="$(settings_get bootstrap.install_ghostty)"
-  # shellcheck disable=SC2034  # read by later steps
   CONF_SKIP_PACKAGES="$(settings_get bootstrap.skip_packages)"
-  # shellcheck disable=SC2034  # read by later steps
   CONF_SKIP_STOW="$(settings_get bootstrap.skip_stow)"
   # shellcheck disable=SC2034  # read by later steps
   CONF_TERMINAL_APP_PROFILE="$(settings_get bootstrap.terminal_app_profile)"
@@ -136,6 +134,33 @@ else SUDO=""; fi
 # the omnishell installer drops its binary here on non-brew systems (and
 # omnishell's own module installs may too); make sure this script can see them
 export PATH="$HOME/.local/bin:$PATH"
+
+# Names a user may skip. zsh is never skippable (the rc files depend on it).
+SKIP_PACKAGES_ALLOWED="fzf zoxide ripgrep fd bat git-delta"
+SKIP_STOW_ALLOWED="git tmux bat ghostty"
+
+# _skip_list <label> <env-value> <conf-value> <allowed-words>
+# Prints the accepted names (lower-case, de-duplicated, in input order), taking
+# the environment value when non-empty, else the file value. Rejected names
+# warn. Globbing is off while the list is split.
+_skip_list() {
+  local label="$1" raw="${2:-$3}" allowed="$4" name accepted=""
+  set -f
+  for name in $raw; do
+    name="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
+    case " $allowed " in
+      *" $name "*) ;;
+      *) warn "ignoring $label '$name': not one of $allowed"; continue ;;
+    esac
+    case " $accepted " in *" $name "*) ;; *) accepted="${accepted:+$accepted }$name" ;; esac
+  done
+  set +f
+  printf '%s' "$accepted"
+}
+skipped_packages() { _skip_list skip_packages "${DOTFILES_SKIP_PACKAGES:-}" "$CONF_SKIP_PACKAGES" "$SKIP_PACKAGES_ALLOWED"; }
+skipped_stow() { _skip_list skip_stow "${DOTFILES_SKIP_STOW:-}" "$CONF_SKIP_STOW" "$SKIP_STOW_ALLOWED"; }
+# _is_in_list <word> <list>: 0 when the word is in the space separated list
+_is_in_list() { case " $2 " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 # stow packages = top-level dirs that ship standalone config FILES (not rc files).
 # Ghostty is the terminal of choice; extra terminal packages via DOTFILES_TERMINALS
