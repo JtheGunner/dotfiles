@@ -174,8 +174,8 @@ overwritten. Point `DOTFILES_CONFIG` at another path to use a different file.
 | `[bootstrap]` `install_zsh`        | `"yes"` · `"no"` · `"ask"`      | `"ask"` | `--install-zsh` / `--no-install-zsh` | `DOTFILES_INSTALL_ZSH`  |
 | `[bootstrap]` `set_default_shell`  | `"yes"` · `"no"` · `"ask"`      | `"ask"` | `--set-default-shell` / `--no-set-default-shell` | `DOTFILES_SET_DEFAULT_SHELL` |
 | `[bootstrap]` `install_ghostty`    | `true` · `false`                | `true`  | `--ghostty` / `--no-ghostty`         | `DOTFILES_INSTALL_GHOSTTY` |
-| `[bootstrap]` `skip_packages`      | list of package names           | `[]`    | -                                    | `DOTFILES_SKIP_PACKAGES` |
-| `[bootstrap]` `skip_stow`          | list of stow package names      | `[]`    | -                                    | `DOTFILES_SKIP_STOW`    |
+| `[bootstrap]` `skip_packages`      | `fzf` `zoxide` `ripgrep` `fd` `bat` `git-delta` (list) | `[]` | -                            | `DOTFILES_SKIP_PACKAGES` |
+| `[bootstrap]` `skip_stow`          | `git` `tmux` `bat` `ghostty` (list) | `[]`      | -                                    | `DOTFILES_SKIP_STOW`    |
 | `[bootstrap]` `terminal_app_profile` | `true` · `false`              | `true`  | -                                    | `DOTFILES_TERMINAL_APP_PROFILE` |
 | `[bootstrap]` `assume_yes`         | `true` · `false`                | `false` | `--yes`                              | `DOTFILES_ASSUME_YES`   |
 | `[bootstrap]` `terminals`          | list of package names           | `[]`    | -                                    | `DOTFILES_TERMINALS`    |
@@ -219,8 +219,9 @@ size = 10000
 > further setup. The environment variable accepts `1`/`0`, `true`/`false` or `yes`/`no`.
 >
 > `skip_packages` leaves base packages out of the installation and `skip_stow` leaves stow
-> packages unlinked; both take names (the environment variables are space separated).
-> `terminal_app_profile = false` leaves the macOS Terminal.app profile untouched. `stow`,
+> packages unlinked; both take the names listed in the table (the environment variables are
+> space separated), and any other name is reported with a warning and ignored.
+> `terminal_app_profile = false` leaves the macOS Terminal.app profile untouched (it only matters on macOS). `stow`,
 > `omnishell`, `curl`, `ca-certificates` and the `zsh` stow package cannot be skipped.
 >
 > The grey inline suggestions (`autosuggestions`) and command colouring
