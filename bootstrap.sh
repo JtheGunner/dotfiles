@@ -104,6 +104,9 @@ read_conf_values() {
   CONF_INSTALL_ZSH="$(settings_get bootstrap.install_zsh)"
   CONF_SET_DEFAULT_SHELL="$(settings_get bootstrap.set_default_shell)"
   CONF_INSTALL_GHOSTTY="$(settings_get bootstrap.install_ghostty)"
+  CONF_SKIP_PACKAGES="$(settings_get bootstrap.skip_packages)"
+  CONF_SKIP_STOW="$(settings_get bootstrap.skip_stow)"
+  CONF_TERMINAL_APP_PROFILE="$(settings_get bootstrap.terminal_app_profile)"
   CONF_ASSUME_YES="$(settings_get bootstrap.assume_yes)"
   CONF_TERMINALS="$(settings_get bootstrap.terminals)"
   CONF_GHOSTTY_KEYBINDS="$(settings_get ghostty.keybinds)"
@@ -131,12 +134,51 @@ else SUDO=""; fi
 # omnishell's own module installs may too); make sure this script can see them
 export PATH="$HOME/.local/bin:$PATH"
 
+# Names a user may skip. zsh is never skippable (the rc files depend on it).
+SKIP_PACKAGES_ALLOWED="fzf zoxide ripgrep fd bat git-delta"
+SKIP_STOW_ALLOWED="git tmux bat ghostty"
+
+# _skip_list <label> <env-value> <conf-value> <allowed-words>
+# Prints the accepted names (lower-case, de-duplicated, in input order), taking
+# the environment value when non-empty, else the file value. Rejected names
+# warn. Globbing is off while the list is split.
+_skip_list() {
+  local label="$1" raw="${2:-$3}" allowed="$4" name accepted=""
+  set -f
+  for name in $raw; do
+    name="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
+    case " $allowed " in
+      *" $name "*) ;;
+      *) warn "ignoring $label '$name': not one of $allowed"; continue ;;
+    esac
+    case " $accepted " in *" $name "*) ;; *) accepted="${accepted:+$accepted }$name" ;; esac
+  done
+  set +f
+  printf '%s' "$accepted"
+}
+skipped_packages() { _skip_list skip_packages "${DOTFILES_SKIP_PACKAGES:-}" "$CONF_SKIP_PACKAGES" "$SKIP_PACKAGES_ALLOWED"; }
+skipped_stow() { _skip_list skip_stow "${DOTFILES_SKIP_STOW:-}" "$CONF_SKIP_STOW" "$SKIP_STOW_ALLOWED"; }
+# _is_in_list <word> <list>: 0 when the word is in the space separated list
+_is_in_list() { case " $2 " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+# The validated skip lists, computed once per settings load (here and in
+# reload_settings) so invalid names warn once; callers read the variables.
+SKIP_PACKAGES_ACTIVE=""
+SKIP_STOW_ACTIVE=""
+resolve_skip_lists() {
+  SKIP_PACKAGES_ACTIVE="$(skipped_packages)"
+  SKIP_STOW_ACTIVE="$(skipped_stow)"
+}
+resolve_skip_lists
+# stow_package_enabled <name>: 0 unless skip_stow lists the package
+stow_package_enabled() { ! _is_in_list "$1" "$SKIP_STOW_ACTIVE"; }
+
 # stow packages = top-level dirs that ship standalone config FILES (not rc files).
 # Ghostty is the terminal of choice; extra terminal packages via DOTFILES_TERMINALS
 # or `terminals` in the [bootstrap] table of the settings file. Names are plain
 # package directory names; globbing is off while the list is split.
 build_packages() {
-  local t
+  local t p skipped
   PACKAGES=(zsh git tmux bat ghostty)
   set -f
   for t in ${DOTFILES_TERMINALS:-$CONF_TERMINALS}; do
@@ -147,6 +189,10 @@ build_packages() {
   done
   set +f
   [ -d "$DOTFILES/nvim" ] && PACKAGES+=(nvim)
+  for t in $SKIP_STOW_ACTIVE; do
+    skipped=("${PACKAGES[@]}"); PACKAGES=()
+    for p in "${skipped[@]}"; do [ "$p" = "$t" ] || PACKAGES+=("$p"); done
+  done
   return 0
 }
 build_packages
@@ -156,6 +202,7 @@ reload_settings() {
   settings_load "$BOOTSTRAP_CONFIG"
   read_conf_values
   resolve_assume_yes
+  resolve_skip_lists
   build_packages
 }
 
@@ -229,9 +276,19 @@ seed_bootstrap_config() {
 DEPS=(stow git-delta fzf zoxide ripgrep fd bat)
 
 install_deps() {
+  local skip="$SKIP_PACKAGES_ACTIVE" name
+  for name in $skip; do
+    log "skipping package $name (skip_packages)"
+  done
+  # Homebrew names; the apt list below maps fd -> fd-find
+  local brew_pkgs=()
+  for name in "${DEPS[@]}"; do
+    _is_in_list "$name" "$skip" || brew_pkgs+=("$name")
+  done
+
   if command -v brew >/dev/null 2>&1; then
     log "installing deps via Homebrew"
-    brew install "${DEPS[@]}" || warn "some brew packages failed"
+    brew install "${brew_pkgs[@]}" || warn "some brew packages failed"
   elif command -v apt-get >/dev/null 2>&1; then
     log "installing deps via apt"
     $SUDO apt-get update -qq || warn "apt-get update failed"
@@ -248,6 +305,9 @@ install_deps() {
       pkgs+=("${APT_BUILD_DEPS[@]}")
     fi
     for pkg in "${pkgs[@]}"; do
+      name="$pkg"
+      [ "$pkg" = fd-find ] && name=fd
+      _is_in_list "$name" "$skip" && continue
       $SUDO apt-get install -y -qq "$pkg" >/dev/null 2>&1 || warn "apt: $pkg not installed"
     done
     if needs_source_builds; then
@@ -1051,8 +1111,50 @@ prepare_omnishell_config() {
   _write_omnishell_config
 }
 
+# the omnishell modules that use a skippable package; a package without one
+# (ripgrep, git-delta) prints nothing
+_modules_using_package() {
+  case "$1" in
+    fzf) echo "fzf" ;;
+    zoxide) echo "zoxide" ;;
+    bat) echo "colorized-man modern-aliases" ;;
+    fd) echo "modern-aliases" ;;
+  esac
+}
+
+# the names of the modules the merged omnishell config enables, space separated
+_enabled_omnishell_modules() {
+  settings_merge_omnishell "$DOTFILES/omnishell/config.toml" | awk '
+    /^[[:space:]]*\[/ {
+      name = ""
+      if (match($0, /^[[:space:]]*\[modules\.[^].]+\]/)) {
+        name = substr($0, RSTART, RLENGTH)
+        sub(/^[[:space:]]*\[modules\./, "", name)
+        sub(/\]$/, "", name)
+      }
+      next
+    }
+    name != "" && /^[[:space:]]*enabled[[:space:]]*=[[:space:]]*true([[:space:]]|#|$)/ { printf "%s ", name }
+  '
+}
+
+# warn once per skipped package that an enabled omnishell module still uses
+warn_skipped_packages_needed_by_modules() {
+  local skip_names="$SKIP_PACKAGES_ACTIVE" package module enabled
+  [ -n "$skip_names" ] || return 0
+  enabled="$(_enabled_omnishell_modules)"
+  for package in $skip_names; do
+    for module in $(_modules_using_package "$package"); do
+      _is_in_list "$module" "$enabled" || continue
+      warn "skipped package $package is still used by the enabled omnishell module $module; disable the module in [modules.$module] or install $package yourself"
+      break
+    done
+  done
+}
+
 apply_omnishell() {
   prepare_omnishell_config
+  warn_skipped_packages_needed_by_modules
   log "omnishell init + apply"
   omnishell init -y 2>/dev/null || omnishell init || true
   _write_omnishell_config   # init may template a fresh one
@@ -1135,8 +1237,27 @@ EOF
 # --------------------------------------------------------------------------
 # 6. macOS Terminal.app - it ignores OSC palette escapes, so import a profile
 # --------------------------------------------------------------------------
+# Whether setup_terminal_app() imports the profile, highest precedence first:
+# DOTFILES_TERMINAL_APP_PROFILE (1, true, yes / 0, false, no), terminal_app_profile
+# in the settings file, default on.
+_terminal_app_profile_enabled() {
+  local mode=""
+  if [ -n "${DOTFILES_TERMINAL_APP_PROFILE:-}" ]; then
+    case "$DOTFILES_TERMINAL_APP_PROFILE" in
+      1 | true | yes) mode=yes ;;
+      0 | false | no) mode=no ;;
+      *) warn "invalid DOTFILES_TERMINAL_APP_PROFILE value '$DOTFILES_TERMINAL_APP_PROFILE' (use 1, true, yes, 0, false or no) - ignored" ;;
+    esac
+  fi
+  if [ -z "$mode" ]; then
+    case "$CONF_TERMINAL_APP_PROFILE" in false) mode=no ;; *) mode=yes ;; esac
+  fi
+  [ "$mode" = yes ]
+}
+
 setup_terminal_app() {
   [ "$OS" = "Darwin" ] || return 0
+  _terminal_app_profile_enabled || { log "skipping Terminal.app profile (terminal_app_profile)"; return 0; }
   local prof="$DOTFILES/rootloops/RootLoops.terminal"
   [ -f "$prof" ] || return 0
   log "importing Terminal.app profile 'Root Loops'"
@@ -1354,15 +1475,25 @@ main() {
   install_ghostty
   install_omnishell
   interactive_modules
+  local name
+  for name in $SKIP_STOW_ACTIVE; do
+    log "skipping stow package $name (skip_stow)"
+  done
   write_rc_base
   stow_packages
-  setup_ghostty_keybinds
-  render_ghostty_settings
-  render_tmux_settings
-  render_git_settings
-  setup_git_delta
-  setup_git_identity
-  setup_git_signing_key
+  if stow_package_enabled ghostty; then
+    setup_ghostty_keybinds
+    render_ghostty_settings
+  fi
+  if stow_package_enabled tmux; then
+    render_tmux_settings
+  fi
+  if stow_package_enabled git; then
+    render_git_settings
+    setup_git_delta
+    setup_git_identity
+    setup_git_signing_key
+  fi
   apply_omnishell
   wire_shell_d
   log "rendering Root Loops colors"

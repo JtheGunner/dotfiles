@@ -116,6 +116,9 @@ bootstrap.set_default_shell enum:yes,no,ask
 bootstrap.assume_yes bool
 bootstrap.terminals list
 bootstrap.install_ghostty bool
+bootstrap.skip_packages list
+bootstrap.skip_stow list
+bootstrap.terminal_app_profile bool
 ghostty.keybinds enum:auto,mac,linux
 ghostty.font_family string
 ghostty.font_size positive
