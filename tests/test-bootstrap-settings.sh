@@ -117,7 +117,7 @@ check "the ghostty stow package stays when the install is off" 'grep -qw ghostty
 
 fresh; conf '[bootstrap]' 'skip_packages = ["fzf", "bat"]' 'skip_stow = ["tmux"]' 'terminal_app_profile = false'
 sh_run '' 'printf "%s|%s|%s" "$CONF_SKIP_PACKAGES" "$CONF_SKIP_STOW" "$CONF_TERMINAL_APP_PROFILE"'
-check "the new keys load from the file" '[ "$OUT" = "fzf bat|tmux|false" ]'
+check "the new keys load from the file" '[ "$(tail -1 <<<"$OUT")" = "fzf bat|tmux|false" ]'
 
 echo ">> seeding"
 fresh; rm -rf "$WORK/cfg"

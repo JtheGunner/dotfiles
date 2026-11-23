@@ -36,9 +36,9 @@ check "names are lower-cased, de-duplicated, in input order" '[ "$OUT" = "fzf ba
 
 fresh; conf '[bootstrap]' 'skip_stow = ["git"]'
 sh_run 'DOTFILES_SKIP_STOW=tmux' 'skipped_stow'
-check "the environment beats the file" '[ "$OUT" = tmux ]'
+check "the environment beats the file" '[ "$(tail -1 <<<"$OUT")" = tmux ]'
 sh_run 'DOTFILES_SKIP_STOW=' 'skipped_stow'
-check "an empty environment value falls back to the file" '[ "$OUT" = git ]'
+check "an empty environment value falls back to the file" '[ "$(tail -1 <<<"$OUT")" = git ]'
 
 fresh; conf '[bootstrap]' 'skip_packages = ["stow", "curl", "nope"]'
 sh_run '' 'skipped_packages'
@@ -105,6 +105,58 @@ deps_run brew ''
 check "brew installs the full list by default" 'grep -qx "brew install stow git-delta fzf zoxide ripgrep fd bat" "$CALLS"'
 deps_run apt ''
 check "apt calls are unchanged without a skip list" 'grep "^apt-get install" "$CALLS" | cmp -s - <(grep "^apt-get install" "$WORK/apt-default")'
+
+echo ">> skip_stow filters the stow packages"
+fresh; : > "$CONF"
+sh_run '' 'echo "${PACKAGES[*]}"'
+check "PACKAGES default is unchanged" 'grep -q "^zsh git tmux bat ghostty" <<<"$OUT" && ! grep -q "skipping stow" <<<"$OUT"'
+
+fresh; conf '[bootstrap]' 'skip_stow = ["tmux", "bat"]'
+sh_run '' 'echo "${PACKAGES[*]}"'
+check "skipped packages leave PACKAGES" 'grep -q "^zsh git ghostty" <<<"$(tail -1 <<<"$OUT")" && ! tail -1 <<<"$OUT" | grep -qE "(^| )(tmux|bat)( |$)"'
+check "each skipped package is logged exactly once" '[ "$(grep -c "skipping stow package tmux (skip_stow)" <<<"$OUT")" = 1 ] && [ "$(grep -c "skipping stow package bat (skip_stow)" <<<"$OUT")" = 1 ]'
+
+sh_run 'DOTFILES_TERMINALS=omnishell' 'echo "${PACKAGES[*]}"'
+check "terminals are still added next to a skip" 'tail -1 <<<"$OUT" | grep -q "^zsh git ghostty omnishell"'
+
+sh_run '' 'reload_settings; echo "${PACKAGES[*]}"'
+check "reload_settings keeps the filter without logging again" '[ "$(grep -c "skipping stow package tmux" <<<"$OUT")" = 1 ] && ! tail -1 <<<"$OUT" | grep -qE "(^| )tmux( |$)"'
+
+sh_run 'DOTFILES_SKIP_STOW=git' 'echo "${PACKAGES[*]}"; DOTFILES_SKIP_STOW=bat; reload_settings; echo "${PACKAGES[*]}"'
+check "reload_settings applies a changed list and logs the new name" '[ "$(grep -c "skipping stow package" <<<"$OUT")" = 2 ] && grep -q "skipping stow package bat" <<<"$OUT" && tail -1 <<<"$OUT" | grep -q "^zsh git tmux ghostty"'
+
+fresh; : > "$CONF"
+sh_run '' 'stow_package_enabled git && echo yes'
+check "stow_package_enabled is true by default" '[ "$OUT" = yes ]'
+conf '[bootstrap]' 'skip_stow = ["git"]'
+sh_run '' 'stow_package_enabled git || echo no; stow_package_enabled tmux && echo tmux-yes'
+check "stow_package_enabled is false for a skipped package only" '[ "$(tail -2 <<<"$OUT" | tr "\n" " ")" = "no tmux-yes " ]'
+
+echo ">> install_ghostty is independent of skip_stow"
+fresh; conf '[bootstrap]' 'skip_stow = ["ghostty"]'
+rm -rf "$WORK/stubs"; mkdir -p "$WORK/stubs"; : > "$CALLS"
+for tool in "$WORK"/bin/*; do ln -s "$(readlink "$tool")" "$WORK/stubs/$(basename "$tool")"; done
+printf '#!/bin/sh\necho "brew $*" >> "%s"\nexit 0\n' "$CALLS" > "$WORK/stubs/brew"; chmod +x "$WORK/stubs/brew"
+RC=0
+OUT="$(env -i PATH="$WORK/stubs" HOME="$WORK/home" DOTFILES_CONFIG="$CONF" BOOTSTRAP_SOURCE_ONLY=1 \
+  "$BASH" -c ". '$DOTFILES/bootstrap.sh'; OS=Darwin; install_ghostty" 2>"$WORK/err")" || RC=$?
+check "install_ghostty still installs the cask" 'grep -qx "brew install --cask ghostty" "$CALLS"'
+
+echo ">> main guards the generated config per stow package"
+STEPS="check_interactive_preconditions check_checkout_consistency seed_bootstrap_config interactive_settings install_deps ensure_zsh ensure_default_shell install_ghostty install_omnishell interactive_modules write_rc_base stow_packages setup_ghostty_keybinds render_ghostty_settings render_tmux_settings render_git_settings setup_git_delta setup_git_identity setup_git_signing_key apply_omnishell wire_shell_d setup_terminal_app finish"
+# <skip_stow list>: run main with every step stubbed; OUT lists the steps that ran
+main_run() {
+  fresh; conf '[bootstrap]' "skip_stow = [$1]"
+  sh_run '' 'for f in '"$STEPS"'; do eval "$f() { echo call:$f; }"; done; bash() { :; }; main'
+}
+main_run ''
+check "main runs every step by default" '[ "$(grep -c "^call:" <<<"$OUT")" = 23 ]'
+main_run '"git"'
+check "skip git drops the four git steps only" '[ "$(grep -c "^call:" <<<"$OUT")" = 19 ] && ! grep -qE "^call:(render_git_settings|setup_git_delta|setup_git_identity|setup_git_signing_key)$" <<<"$OUT"'
+main_run '"tmux"'
+check "skip tmux drops render_tmux_settings only" '[ "$(grep -c "^call:" <<<"$OUT")" = 22 ] && ! grep -q "^call:render_tmux_settings$" <<<"$OUT"'
+main_run '"ghostty"'
+check "skip ghostty drops keybinds and settings but keeps install_ghostty" '[ "$(grep -c "^call:" <<<"$OUT")" = 21 ] && ! grep -qE "^call:(setup_ghostty_keybinds|render_ghostty_settings)$" <<<"$OUT" && grep -q "^call:install_ghostty$" <<<"$OUT"'
 
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"

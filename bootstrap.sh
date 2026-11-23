@@ -162,13 +162,26 @@ skipped_stow() { _skip_list skip_stow "${DOTFILES_SKIP_STOW:-}" "$CONF_SKIP_STOW
 # _is_in_list <word> <list>: 0 when the word is in the space separated list
 _is_in_list() { case " $2 " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
+# the validated skip_stow list of the last build_packages run, so the guards in
+# main do not validate (and warn) again; SKIP_STOW_LOGGED keeps the log line to
+# once per name even though build_packages runs again after --interactive
+SKIP_STOW_ACTIVE=""
+SKIP_STOW_LOGGED=""
+# stow_package_enabled <name>: 0 unless skip_stow lists the package
+stow_package_enabled() { ! _is_in_list "$1" "$SKIP_STOW_ACTIVE"; }
+
 # stow packages = top-level dirs that ship standalone config FILES (not rc files).
 # Ghostty is the terminal of choice; extra terminal packages via DOTFILES_TERMINALS
 # or `terminals` in the [bootstrap] table of the settings file. Names are plain
 # package directory names; globbing is off while the list is split.
 build_packages() {
-  local t
+  local t p skipped
   PACKAGES=(zsh git tmux bat ghostty)
+  SKIP_STOW_ACTIVE="$(skipped_stow)"
+  for t in $SKIP_STOW_ACTIVE; do
+    _is_in_list "$t" "$SKIP_STOW_LOGGED" || log "skipping stow package $t (skip_stow)"
+    SKIP_STOW_LOGGED="${SKIP_STOW_LOGGED:+$SKIP_STOW_LOGGED }$t"
+  done
   set -f
   for t in ${DOTFILES_TERMINALS:-$CONF_TERMINALS}; do
     case "$t" in
@@ -178,6 +191,10 @@ build_packages() {
   done
   set +f
   [ -d "$DOTFILES/nvim" ] && PACKAGES+=(nvim)
+  for t in $SKIP_STOW_ACTIVE; do
+    skipped=("${PACKAGES[@]}"); PACKAGES=()
+    for p in "${skipped[@]}"; do [ "$p" = "$t" ] || PACKAGES+=("$p"); done
+  done
   return 0
 }
 build_packages
@@ -1401,13 +1418,19 @@ main() {
   interactive_modules
   write_rc_base
   stow_packages
-  setup_ghostty_keybinds
-  render_ghostty_settings
-  render_tmux_settings
-  render_git_settings
-  setup_git_delta
-  setup_git_identity
-  setup_git_signing_key
+  if stow_package_enabled ghostty; then
+    setup_ghostty_keybinds
+    render_ghostty_settings
+  fi
+  if stow_package_enabled tmux; then
+    render_tmux_settings
+  fi
+  if stow_package_enabled git; then
+    render_git_settings
+    setup_git_delta
+    setup_git_identity
+    setup_git_signing_key
+  fi
   apply_omnishell
   wire_shell_d
   log "rendering Root Loops colors"
