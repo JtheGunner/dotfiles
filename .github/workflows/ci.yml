@@ -24,7 +24,7 @@ jobs:
     # "ubuntu-latest" so the required check names do not change. Fork PRs never
     # reach the self-hosted runner (it has the host Docker socket); neither do
     # Dependabot PRs, whose workflow changes are unreviewed until merged.
-    runs-on: ${{ matrix.os == 'macos-latest' && 'macos-latest' || ((github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON('["self-hosted","Linux","X64","docker"]') || 'ubuntu-latest') }}
+    runs-on: ${{ matrix.os == 'macos-latest' && 'macos-latest' || ((github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && !startsWith(github.event.pull_request.head.ref, 'dependabot/'))) && fromJSON('["self-hosted","Linux","X64","docker"]') || 'ubuntu-latest') }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -89,7 +89,7 @@ jobs:
     name: secret scan (full history)
     # Self-hosted runner for trusted runs only (see lint-test); other PRs stay on
     # GitHub's runners.
-    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON('["self-hosted","Linux","X64","docker"]') || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && !startsWith(github.event.pull_request.head.ref, 'dependabot/'))) && fromJSON('["self-hosted","Linux","X64","docker"]') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
