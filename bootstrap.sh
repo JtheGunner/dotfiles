@@ -596,14 +596,20 @@ install_omnishell() {
 # rc file (relative to $HOME) : the rc library its base block sources
 RC_BASES=(".zshrc:zsh/zshrc.zsh" ".bashrc:bash/bashrc.bash")
 
-# the dotfiles:base block that points an rc file at this checkout
+# the dotfiles:base block that points an rc file at this checkout. bash reads ~/.bashrc
+# for non-interactive shells too (sshd starts every remote command through it), so the
+# bash block returns early there: nothing below it is meant for ssh commands, and
+# Ansible's become prompt detection breaks when it runs.
 _rc_base_block() {
-  cat <<EOF
-# >>> dotfiles:base >>>
-export DOTFILES="$DOTFILES"
-[ -r "\$DOTFILES/$1" ] && . "\$DOTFILES/$1"
-# <<< dotfiles:base <<<
-EOF
+  printf '%s\n' '# >>> dotfiles:base >>>'
+  printf 'export DOTFILES="%s"\n' "$DOTFILES"
+  case "$1" in
+    bash/*)
+      # shellcheck disable=SC2016  # literal text for the rc file, not an expansion here
+      printf '%s\n' 'case $- in *i*) ;; *) return ;; esac' ;;
+  esac
+  printf '[ -r "$DOTFILES/%s" ] && . "$DOTFILES/%s"\n' "$1" "$1"
+  printf '%s\n' '# <<< dotfiles:base <<<'
 }
 
 # the DOTFILES= path inside an rc file's base block; empty without a block
