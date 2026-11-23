@@ -57,6 +57,9 @@ export DOTFILES="$HOME/.dotfiles"
 # <<< dotfiles:base <<<
 ```
 
+(The `~/.bashrc` block has one more line after the `export`, `case $- in *i*) ;; *) return ;; esac`:
+bash reads `~/.bashrc` for ssh commands too, and they must not load the shell setup.)
+
 omnishell and the `shell.d` block then *append* their marker blocks to those
 files. If the rc file were a stow symlink into the repo, this appends would be
 written straight back into version control, so bootstrap writes a real file that
