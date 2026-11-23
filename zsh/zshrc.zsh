@@ -16,6 +16,12 @@
 
 export TERM=${TERM:-xterm-256color}
 
+# Hosts without Ghostty's terminfo (e.g. over SSH) cannot resolve xterm-ghostty;
+# fall back so curses programs and line editing keep working.
+if [[ "$TERM" == *ghostty* ]] && ! infocmp "$TERM" >/dev/null 2>&1; then
+  export TERM=xterm-256color
+fi
+
 # nvim as the standard editor
 if command -v nvim >/dev/null 2>&1; then
   export VISUAL=nvim

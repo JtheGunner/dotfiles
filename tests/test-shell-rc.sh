@@ -58,6 +58,25 @@ if command -v zsh >/dev/null 2>&1; then
     (( \$+functions[_dotfiles_comp_globdots] )) && print ' hook-left' || print ' hook-gone'
   ")"
   expect "globdots survives a later compinit; one-shot hook removes itself" "globdots hook-gone" "$actual"
+
+  # TERM fallback: a fake infocmp makes "terminfo entry known / unknown"
+  # independent of the terminfo database of the host running the test.
+  mkdir -p "$WORK/infocmp-known" "$WORK/infocmp-unknown"
+  printf '#!/bin/sh\nexit 0\n' > "$WORK/infocmp-known/infocmp"
+  printf '#!/bin/sh\nexit 1\n' > "$WORK/infocmp-unknown/infocmp"
+  chmod +x "$WORK/infocmp-known/infocmp" "$WORK/infocmp-unknown/infocmp"
+  term_after_rc() {   # <fake infocmp dir> <initial TERM>
+    PATH="$1:$PATH" TERM="$2" zsh -f -c ". '$DOTFILES/zsh/zshrc.zsh' 2>/dev/null; print -rn -- \"\$TERM\""
+  }
+
+  expect "unknown ghostty terminfo falls back to xterm-256color" \
+    "xterm-256color" "$(term_after_rc "$WORK/infocmp-unknown" xterm-ghostty)"
+  expect "known ghostty terminfo leaves TERM unchanged" \
+    "xterm-ghostty" "$(term_after_rc "$WORK/infocmp-known" xterm-ghostty)"
+  expect "unknown non-ghostty terminfo leaves TERM unchanged" \
+    "xterm-kitty" "$(term_after_rc "$WORK/infocmp-unknown" xterm-kitty)"
+  expect "empty TERM defaults to xterm-256color" \
+    "xterm-256color" "$(term_after_rc "$WORK/infocmp-known" "")"
 else
   echo ">> zsh not installed - zsh tests skipped"
 fi
