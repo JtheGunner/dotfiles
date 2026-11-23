@@ -22,8 +22,9 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     # The Linux leg runs on the self-hosted runner; the matrix value stays
     # "ubuntu-latest" so the required check names do not change. Fork PRs never
-    # reach the self-hosted runner (it has the host Docker socket).
-    runs-on: ${{ matrix.os == 'macos-latest' && 'macos-latest' || (github.event.pull_request.head.repo.fork != true && fromJSON('["self-hosted","Linux","X64","docker"]') || 'ubuntu-latest') }}
+    # reach the self-hosted runner (it has the host Docker socket); neither do
+    # Dependabot PRs, whose workflow changes are unreviewed until merged.
+    runs-on: ${{ matrix.os == 'macos-latest' && 'macos-latest' || ((github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON('["self-hosted","Linux","X64","docker"]') || 'ubuntu-latest') }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -86,8 +87,9 @@ jobs:
 
   secrets:
     name: secret scan (full history)
-    # Self-hosted runner for same-repo runs only; fork PRs stay on GitHub's runners.
-    runs-on: ${{ github.event.pull_request.head.repo.fork != true && fromJSON('["self-hosted","Linux","X64","docker"]') || 'ubuntu-latest' }}
+    # Self-hosted runner for trusted runs only (see lint-test); other PRs stay on
+    # GitHub's runners.
+    runs-on: ${{ (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) && fromJSON('["self-hosted","Linux","X64","docker"]') || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -104,5 +106,4 @@ jobs:
             git /repo --no-banner --redact -v)"
           trap 'docker rm -f "$cid" >/dev/null' EXIT
           docker cp "$PWD/." "$cid:/repo"
-          docker start -a "$cid" || true
-          exit "$(docker inspect -f '{{.State.ExitCode}}' "$cid")"
+          docker start -a "$cid"
