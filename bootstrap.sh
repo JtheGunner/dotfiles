@@ -260,9 +260,20 @@ seed_bootstrap_config() {
 DEPS=(stow git-delta fzf zoxide ripgrep fd bat)
 
 install_deps() {
+  local skip name
+  skip="$(skipped_packages)"
+  for name in $skip; do
+    log "skipping package $name (skip_packages)"
+  done
+  # Homebrew names; the apt list below maps fd -> fd-find
+  local brew_pkgs=()
+  for name in "${DEPS[@]}"; do
+    _is_in_list "$name" "$skip" || brew_pkgs+=("$name")
+  done
+
   if command -v brew >/dev/null 2>&1; then
     log "installing deps via Homebrew"
-    brew install "${DEPS[@]}" || warn "some brew packages failed"
+    brew install "${brew_pkgs[@]}" || warn "some brew packages failed"
   elif command -v apt-get >/dev/null 2>&1; then
     log "installing deps via apt"
     $SUDO apt-get update -qq || warn "apt-get update failed"
@@ -279,6 +290,9 @@ install_deps() {
       pkgs+=("${APT_BUILD_DEPS[@]}")
     fi
     for pkg in "${pkgs[@]}"; do
+      name="$pkg"
+      [ "$pkg" = fd-find ] && name=fd
+      _is_in_list "$name" "$skip" && continue
       $SUDO apt-get install -y -qq "$pkg" >/dev/null 2>&1 || warn "apt: $pkg not installed"
     done
     if needs_source_builds; then

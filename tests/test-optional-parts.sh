@@ -59,5 +59,52 @@ check "a glob is rejected, not expanded" '[ -z "$OUT" ] && grep -q "ignoring ski
 sh_run '' '_is_in_list bat "fzf bat" && ! _is_in_list ba "fzf bat" && echo yes'
 check "_is_in_list matches whole words" '[ "$OUT" = yes ]'
 
+echo ">> install_deps honours skip_packages"
+CALLS="$WORK/calls"
+# <manager: brew|apt> <env assignments>: run install_deps against stub package managers
+deps_run() {
+  rm -rf "$WORK/stubs"; mkdir -p "$WORK/stubs" "$WORK/cfg" "$WORK/home/.config"; : > "$CALLS"
+  local tool
+  for tool in "$WORK"/bin/*; do ln -s "$(readlink "$tool")" "$WORK/stubs/$(basename "$tool")"; done
+  local stubbed=(stow)
+  if [ "$1" = brew ]; then stubbed+=(brew); else stubbed+=(apt-get apt-cache curl cargo); fi
+  for tool in "${stubbed[@]}"; do
+    printf '#!/bin/sh\necho "%s $*" >> "%s"\nexit 0\n' "$tool" "$CALLS" > "$WORK/stubs/$tool"
+    chmod +x "$WORK/stubs/$tool"
+  done
+  RC=0
+  OUT="$(env -i PATH="$WORK/stubs" HOME="$WORK/home" DOTFILES_CONFIG="$CONF" BOOTSTRAP_SOURCE_ONLY=1 $2 \
+    "$BASH" -c ". '$DOTFILES/bootstrap.sh'; SUDO=''; install_deps" 2>"$WORK/err")" || RC=$?
+}
+
+fresh
+deps_run apt ''
+cp "$CALLS" "$WORK/apt-default"
+for pkg in stow git-delta fzf zoxide ripgrep fd-find bat; do
+  check "default apt installs $pkg" "grep -q '^apt-get install .* $pkg\$' '$CALLS'"
+done
+
+conf '[bootstrap]' 'skip_packages = ["fzf", "git-delta"]'
+deps_run apt ''
+check "apt skips fzf and git-delta" '! grep -q -E "^apt-get install .* (fzf|git-delta)$" "$CALLS"'
+for pkg in stow zoxide bat; do
+  check "apt still installs $pkg when others are skipped" "grep -q '^apt-get install .* $pkg\$' '$CALLS'"
+done
+check "the skip is logged" 'grep -q "skipping package fzf (skip_packages)" <<<"$OUT"'
+check "every skipped name is logged" 'grep -q "skipping package git-delta (skip_packages)" <<<"$OUT"'
+
+conf '[bootstrap]' 'skip_packages = ["fd"]'
+deps_run apt ''
+check "apt drops fd-find when fd is skipped" '! grep -q "fd-find" "$CALLS" && grep -q "^apt-get install .* bat\$" "$CALLS"'
+
+deps_run brew ''
+check "brew drops fd when fd is skipped" 'grep -qx "brew install stow git-delta fzf zoxide ripgrep bat" "$CALLS"'
+
+conf '[bootstrap]' 'skip_packages = []'
+deps_run brew ''
+check "brew installs the full list by default" 'grep -qx "brew install stow git-delta fzf zoxide ripgrep fd bat" "$CALLS"'
+deps_run apt ''
+check "apt calls are unchanged without a skip list" 'grep "^apt-get install" "$CALLS" | cmp -s - <(grep "^apt-get install" "$WORK/apt-default")'
+
 if [ "$failures" -gt 0 ]; then echo "$failures check(s) failed"; exit 1; fi
 echo "all checks passed"
