@@ -142,6 +142,40 @@ OUT="$(env -i PATH="$WORK/stubs" HOME="$WORK/home" DOTFILES_CONFIG="$CONF" BOOTS
   "$BASH" -c ". '$DOTFILES/bootstrap.sh'; OS=Darwin; install_ghostty" 2>"$WORK/err")" || RC=$?
 check "install_ghostty still installs the cask" 'grep -qx "brew install --cask ghostty" "$CALLS"'
 
+echo ">> terminal_app_profile switches the Terminal.app import"
+# <env assignments> <OS>: run setup_terminal_app with open/defaults/sleep stubbed; OUT is stdout, CALLS the commands run
+term_run() {
+  : > "$CALLS"
+  sh_run "$1" 'OS='"$2"'; open() { echo "open $*" >> "'"$CALLS"'"; }; defaults() { echo "defaults $*" >> "'"$CALLS"'"; }; sleep() { echo "sleep $*" >> "'"$CALLS"'"; }; setup_terminal_app'
+}
+fresh; : > "$CONF"
+term_run '' Darwin
+check "the profile is imported by default" 'grep -q "^open " "$CALLS" && grep -q "^defaults " "$CALLS" && ! grep -q "skipping Terminal.app" <<<"$OUT"'
+
+fresh; conf '[bootstrap]' 'terminal_app_profile = false'
+term_run '' Darwin
+check "file false skips open, defaults and sleep and logs it" '[ ! -s "$CALLS" ] && grep -q "skipping Terminal.app profile (terminal_app_profile)" <<<"$OUT"'
+
+term_run 'DOTFILES_TERMINAL_APP_PROFILE=1' Darwin
+check "the environment beats a file false" 'grep -q "^open " "$CALLS"'
+
+fresh; conf '[bootstrap]' 'terminal_app_profile = true'
+term_run 'DOTFILES_TERMINAL_APP_PROFILE=no' Darwin
+check "the environment can switch it off" '[ ! -s "$CALLS" ] && grep -q "skipping Terminal.app profile" <<<"$OUT"'
+
+fresh; conf '[bootstrap]' 'terminal_app_profile = false'
+term_run 'DOTFILES_TERMINAL_APP_PROFILE=bogus' Darwin
+check "an invalid value warns and falls back to the file" '[ ! -s "$CALLS" ] && grep -q "invalid DOTFILES_TERMINAL_APP_PROFILE value .bogus." "$WORK/err"'
+
+term_run 'DOTFILES_TERMINAL_APP_PROFILE=' Darwin
+check "an empty environment value falls back to the file" '[ ! -s "$CALLS" ]'
+
+for setting in true false; do
+  fresh; conf '[bootstrap]' "terminal_app_profile = $setting"
+  term_run '' Linux
+  check "on Linux nothing runs or is logged (file $setting)" '[ ! -s "$CALLS" ] && ! grep -q "Terminal.app" <<<"$OUT"'
+done
+
 echo ">> main guards the generated config per stow package"
 STEPS="check_interactive_preconditions check_checkout_consistency seed_bootstrap_config interactive_settings install_deps ensure_zsh ensure_default_shell install_ghostty install_omnishell interactive_modules write_rc_base stow_packages setup_ghostty_keybinds render_ghostty_settings render_tmux_settings render_git_settings setup_git_delta setup_git_identity setup_git_signing_key apply_omnishell wire_shell_d setup_terminal_app finish"
 # <skip_stow list>: run main with every step stubbed; OUT lists the steps that ran

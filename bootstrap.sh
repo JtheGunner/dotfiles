@@ -106,7 +106,6 @@ read_conf_values() {
   CONF_INSTALL_GHOSTTY="$(settings_get bootstrap.install_ghostty)"
   CONF_SKIP_PACKAGES="$(settings_get bootstrap.skip_packages)"
   CONF_SKIP_STOW="$(settings_get bootstrap.skip_stow)"
-  # shellcheck disable=SC2034  # read by later steps
   CONF_TERMINAL_APP_PROFILE="$(settings_get bootstrap.terminal_app_profile)"
   CONF_ASSUME_YES="$(settings_get bootstrap.assume_yes)"
   CONF_TERMINALS="$(settings_get bootstrap.terminals)"
@@ -1197,8 +1196,27 @@ EOF
 # --------------------------------------------------------------------------
 # 6. macOS Terminal.app - it ignores OSC palette escapes, so import a profile
 # --------------------------------------------------------------------------
+# Whether setup_terminal_app() imports the profile, highest precedence first:
+# DOTFILES_TERMINAL_APP_PROFILE (1, true, yes / 0, false, no), terminal_app_profile
+# in the settings file, default on.
+_terminal_app_profile_enabled() {
+  local mode=""
+  if [ -n "${DOTFILES_TERMINAL_APP_PROFILE:-}" ]; then
+    case "$DOTFILES_TERMINAL_APP_PROFILE" in
+      1 | true | yes) mode=yes ;;
+      0 | false | no) mode=no ;;
+      *) warn "invalid DOTFILES_TERMINAL_APP_PROFILE value '$DOTFILES_TERMINAL_APP_PROFILE' (use 1, true, yes, 0, false or no) - ignored" ;;
+    esac
+  fi
+  if [ -z "$mode" ]; then
+    case "$CONF_TERMINAL_APP_PROFILE" in false) mode=no ;; *) mode=yes ;; esac
+  fi
+  [ "$mode" = yes ]
+}
+
 setup_terminal_app() {
   [ "$OS" = "Darwin" ] || return 0
+  _terminal_app_profile_enabled || { log "skipping Terminal.app profile (terminal_app_profile)"; return 0; }
   local prof="$DOTFILES/rootloops/RootLoops.terminal"
   [ -f "$prof" ] || return 0
   log "importing Terminal.app profile 'Root Loops'"
