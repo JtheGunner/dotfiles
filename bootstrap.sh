@@ -161,11 +161,15 @@ skipped_stow() { _skip_list skip_stow "${DOTFILES_SKIP_STOW:-}" "$CONF_SKIP_STOW
 # _is_in_list <word> <list>: 0 when the word is in the space separated list
 _is_in_list() { case " $2 " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
-# the validated skip_stow list of the last build_packages run, so the guards in
-# main do not validate (and warn) again; SKIP_STOW_LOGGED keeps the log line to
-# once per name even though build_packages runs again after --interactive
+# The validated skip lists, computed once per settings load (here and in
+# reload_settings) so invalid names warn once; callers read the variables.
+SKIP_PACKAGES_ACTIVE=""
 SKIP_STOW_ACTIVE=""
-SKIP_STOW_LOGGED=""
+resolve_skip_lists() {
+  SKIP_PACKAGES_ACTIVE="$(skipped_packages)"
+  SKIP_STOW_ACTIVE="$(skipped_stow)"
+}
+resolve_skip_lists
 # stow_package_enabled <name>: 0 unless skip_stow lists the package
 stow_package_enabled() { ! _is_in_list "$1" "$SKIP_STOW_ACTIVE"; }
 
@@ -176,11 +180,6 @@ stow_package_enabled() { ! _is_in_list "$1" "$SKIP_STOW_ACTIVE"; }
 build_packages() {
   local t p skipped
   PACKAGES=(zsh git tmux bat ghostty)
-  SKIP_STOW_ACTIVE="$(skipped_stow)"
-  for t in $SKIP_STOW_ACTIVE; do
-    _is_in_list "$t" "$SKIP_STOW_LOGGED" || log "skipping stow package $t (skip_stow)"
-    SKIP_STOW_LOGGED="${SKIP_STOW_LOGGED:+$SKIP_STOW_LOGGED }$t"
-  done
   set -f
   for t in ${DOTFILES_TERMINALS:-$CONF_TERMINALS}; do
     case "$t" in
@@ -203,6 +202,7 @@ reload_settings() {
   settings_load "$BOOTSTRAP_CONFIG"
   read_conf_values
   resolve_assume_yes
+  resolve_skip_lists
   build_packages
 }
 
@@ -276,8 +276,7 @@ seed_bootstrap_config() {
 DEPS=(stow git-delta fzf zoxide ripgrep fd bat)
 
 install_deps() {
-  local skip name
-  skip="$(skipped_packages)"
+  local skip="$SKIP_PACKAGES_ACTIVE" name
   for name in $skip; do
     log "skipping package $name (skip_packages)"
   done
@@ -1141,11 +1140,10 @@ _enabled_omnishell_modules() {
 
 # warn once per skipped package that an enabled omnishell module still uses
 warn_skipped_packages_needed_by_modules() {
-  local skipped package module enabled
-  skipped="$(skipped_packages)"
-  [ -n "$skipped" ] || return 0
+  local skip_names="$SKIP_PACKAGES_ACTIVE" package module enabled
+  [ -n "$skip_names" ] || return 0
   enabled="$(_enabled_omnishell_modules)"
-  for package in $skipped; do
+  for package in $skip_names; do
     for module in $(_modules_using_package "$package"); do
       _is_in_list "$module" "$enabled" || continue
       warn "skipped package $package is still used by the enabled omnishell module $module; disable the module in [modules.$module] or install $package yourself"
@@ -1477,6 +1475,10 @@ main() {
   install_ghostty
   install_omnishell
   interactive_modules
+  local name
+  for name in $SKIP_STOW_ACTIVE; do
+    log "skipping stow package $name (skip_stow)"
+  done
   write_rc_base
   stow_packages
   if stow_package_enabled ghostty; then

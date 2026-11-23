@@ -77,8 +77,8 @@ exec $SHELL
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
 2. installs dependencies, omnishell (upgrading it below 0.8.0) and Ghostty (unless switched off), and zsh if you opted in, then offers to make zsh your login shell (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
-4. stows the packages
-5. writes the git `delta` config and asks for your git identity (see [Git identity](#-git-identity))
+4. stows the packages (unless skipped)
+5. writes the git `delta` config and asks for your git identity (unless skipped) (see [Git identity](#-git-identity))
 6. applies `omnishell/config.toml`, which also installs `starship`, `mise`, `tmux`, `direnv` and `broot`
 7. appends the `shell.d` block to both rc files
 8. renders the terminal colour themes
@@ -219,7 +219,9 @@ size = 10000
 > further setup. The environment variable accepts `1`/`0`, `true`/`false` or `yes`/`no`.
 >
 > `skip_packages` leaves base packages out of the installation and `skip_stow` leaves stow
-> packages unlinked; both take the names listed in the table (the environment variables are
+> packages unlinked and their generated config unrendered. Skipping only stops bootstrap from
+> acting: a package that is already installed or linked stays that way (nothing is uninstalled or
+> unlinked). Both take the names listed in the table (the environment variables are
 > space separated), and any other name is reported with a warning and ignored.
 > `terminal_app_profile = false` leaves the macOS Terminal.app profile untouched (it only matters on macOS). `stow`,
 > `omnishell`, `curl`, `ca-certificates` and the `zsh` stow package cannot be skipped.

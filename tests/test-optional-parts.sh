@@ -36,9 +36,9 @@ check "names are lower-cased, de-duplicated, in input order" '[ "$OUT" = "fzf ba
 
 fresh; conf '[bootstrap]' 'skip_stow = ["git"]'
 sh_run 'DOTFILES_SKIP_STOW=tmux' 'skipped_stow'
-check "the environment beats the file" '[ "$(tail -1 <<<"$OUT")" = tmux ]'
+check "the environment beats the file" '[ "$OUT" = tmux ]'
 sh_run 'DOTFILES_SKIP_STOW=' 'skipped_stow'
-check "an empty environment value falls back to the file" '[ "$(tail -1 <<<"$OUT")" = git ]'
+check "an empty environment value falls back to the file" '[ "$OUT" = git ]'
 
 fresh; conf '[bootstrap]' 'skip_packages = ["stow", "curl", "nope"]'
 sh_run '' 'skipped_packages'
@@ -113,17 +113,23 @@ check "PACKAGES default is unchanged" 'grep -q "^zsh git tmux bat ghostty" <<<"$
 
 fresh; conf '[bootstrap]' 'skip_stow = ["tmux", "bat"]'
 sh_run '' 'echo "${PACKAGES[*]}"'
-check "skipped packages leave PACKAGES" 'grep -q "^zsh git ghostty" <<<"$(tail -1 <<<"$OUT")" && ! tail -1 <<<"$OUT" | grep -qE "(^| )(tmux|bat)( |$)"'
-check "each skipped package is logged exactly once" '[ "$(grep -c "skipping stow package tmux (skip_stow)" <<<"$OUT")" = 1 ] && [ "$(grep -c "skipping stow package bat (skip_stow)" <<<"$OUT")" = 1 ]'
+check "skipped packages leave PACKAGES" 'grep -q "^zsh git ghostty" <<<"$OUT" && ! grep -qE "(^| )(tmux|bat)( |$)" <<<"$OUT"'
+check "building the packages does not log" '! grep -q "skipping stow" <<<"$OUT"'
 
 sh_run 'DOTFILES_TERMINALS=omnishell' 'echo "${PACKAGES[*]}"'
-check "terminals are still added next to a skip" 'tail -1 <<<"$OUT" | grep -q "^zsh git ghostty omnishell"'
+check "terminals are still added next to a skip" 'grep -q "^zsh git ghostty omnishell" <<<"$OUT"'
 
 sh_run '' 'reload_settings; echo "${PACKAGES[*]}"'
-check "reload_settings keeps the filter without logging again" '[ "$(grep -c "skipping stow package tmux" <<<"$OUT")" = 1 ] && ! tail -1 <<<"$OUT" | grep -qE "(^| )tmux( |$)"'
+check "reload_settings keeps the filter" '! grep -qE "(^| )tmux( |$)" <<<"$OUT" && ! grep -q "skipping stow" <<<"$OUT"'
 
 sh_run 'DOTFILES_SKIP_STOW=git' 'echo "${PACKAGES[*]}"; DOTFILES_SKIP_STOW=bat; reload_settings; echo "${PACKAGES[*]}"'
-check "reload_settings applies a changed list and logs the new name" '[ "$(grep -c "skipping stow package" <<<"$OUT")" = 2 ] && grep -q "skipping stow package bat" <<<"$OUT" && tail -1 <<<"$OUT" | grep -q "^zsh git tmux ghostty"'
+check "reload_settings applies a changed list" 'tail -1 <<<"$OUT" | grep -q "^zsh git tmux ghostty" && [ "$(sed -n 1p <<<"$OUT")" = "zsh tmux bat ghostty" ]'
+
+fresh; conf '[bootstrap]' 'skip_packages = ["nope"]' 'skip_stow = ["nada"]'
+sh_run '' 'reload_settings; reload_settings; echo "$SKIP_PACKAGES_ACTIVE|$SKIP_STOW_ACTIVE"'
+check "an invalid name warns once per settings load" '[ "$(grep -c "ignoring skip_packages" "$WORK/err")" = 3 ] && [ "$(grep -c "ignoring skip_stow" "$WORK/err")" = 3 ]'
+sh_run '' 'warn_skipped_packages_needed_by_modules; warn_skipped_packages_needed_by_modules'
+check "callers read the validated lists without warning again" '[ "$(grep -c "ignoring skip_packages" "$WORK/err")" = 1 ]'
 
 fresh; : > "$CONF"
 sh_run '' 'stow_package_enabled git && echo yes'
@@ -187,6 +193,8 @@ main_run ''
 check "main runs every step by default" '[ "$(grep -c "^call:" <<<"$OUT")" = 23 ]'
 main_run '"git"'
 check "skip git drops the four git steps only" '[ "$(grep -c "^call:" <<<"$OUT")" = 19 ] && ! grep -qE "^call:(render_git_settings|setup_git_delta|setup_git_identity|setup_git_signing_key)$" <<<"$OUT"'
+main_run '"tmux", "bat"'
+check "main logs each skipped stow package once, in the final settings" '[ "$(grep -c "^.*skipping stow package tmux (skip_stow)" <<<"$OUT")" = 1 ] && [ "$(grep -c "skipping stow package bat (skip_stow)" <<<"$OUT")" = 1 ]'
 main_run '"tmux"'
 check "skip tmux drops render_tmux_settings only" '[ "$(grep -c "^call:" <<<"$OUT")" = 22 ] && ! grep -q "^call:render_tmux_settings$" <<<"$OUT"'
 main_run '"ghostty"'

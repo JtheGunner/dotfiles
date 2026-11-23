@@ -37,12 +37,15 @@
 #install_ghostty = true
 #
 # Base packages to leave out, by name. Allowed names: fzf, zoxide, ripgrep, fd, bat,
-# git-delta. Any other name (including stow, curl and ca-certificates, which cannot be
+# git-delta. Skipping only stops the installation; a package that is already installed
+# stays installed. Any other name (including stow, curl and ca-certificates, which cannot be
 # skipped) is reported with a warning and ignored. Default: an empty list.
 # Environment: DOTFILES_SKIP_PACKAGES (space-separated)
 #skip_packages = []
 #
 # Stow packages to leave unlinked, by name. Allowed names: git, tmux, bat, ghostty.
+# Skipping only stops bootstrap from linking and rendering them; a package that is already
+# linked stays linked (nothing is unlinked).
 # Any other name (including the zsh package, which cannot be skipped) is reported with
 # a warning and ignored. Default: an empty list.
 # Environment: DOTFILES_SKIP_STOW (space-separated)

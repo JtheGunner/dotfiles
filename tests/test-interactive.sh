@@ -71,6 +71,13 @@ check "the valid retry is written"                          'grep -qx "keybinds 
 check "the old file is kept as .bak"                        'cmp -s "$CONF.bak" "$DOTFILES/config.toml.example"'
 check "the template comments are still there"               'grep -q "^# Install zsh when it is missing" "$CONF"'
 
+echo ">> prompts: skip_stow is written and applied"
+fresh
+ix_run "$(empties 6)tmux\n$(empties 18)y\n" 'interactive_settings; printf "%s|%s" "$CONF_SKIP_STOW" "${PACKAGES[*]}"'
+check "the run succeeds and reloads the list"               '[ "$RC" = 0 ] && grep -q "tmux|zsh git" <<< "$OUT"'
+check "skip_stow is written"                                'grep -qx "skip_stow = \[\"tmux\"\]" "$CONF"'
+check "PACKAGES no longer contains tmux after the reload"   'grep -q "tmux|zsh git bat ghostty\$" <<< "$OUT"'
+
 echo ">> prompts: a dash clears a key"
 fresh
 printf '[bootstrap]\ninstall_zsh = "yes"\n# note\n' > "$CONF"
