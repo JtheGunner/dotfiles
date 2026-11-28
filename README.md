@@ -22,14 +22,14 @@ nothing is configured twice:
 
 | Layer                                                    | Owns                                                                                                                                                                                                                                             | Mechanism                                                                                                 |
 |----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
-| **[omnishell](https://github.com/JtheGunner/omnishell)** | rc *lines*: plugin inits, history, completion, `zsh-completions`, `dynamic-completion`, `fzf`, `navi`, `zoxide`, `modern-aliases`, `colorized-man`, `tealdeer`, `you-should-use`, `direnv`, `broot`, `mise`, `starship` (prompt + its seeded config), `root-loops` (OSC palette push), `tmux` (installs it; auto-attach is off) | one marker block in `~/.zshrc` / `~/.bashrc`, sourcing a generated `init.<shell>`                         |
+| **[omnishell](https://github.com/JtheGunner/omnishell)** | rc *lines*: plugin inits, history, completion, `zsh-completions`, `dynamic-completion`, `zsh-edit-select`, `fzf`, `navi`, `zoxide`, `modern-aliases`, `colorized-man`, `tealdeer`, `you-should-use`, `direnv`, `broot`, `mise`, `starship` (prompt + its seeded config), `root-loops` (OSC palette push), `tmux` (installs it; auto-attach is off) | one marker block in `~/.zshrc` / `~/.bashrc`, sourcing a generated `init.<shell>`                         |
 | **this repo: stow packages**                             | standalone config *files*: `git`, `tmux` (`.tmux.conf` only), `bat`, `ghostty` (+ optional `nvim`)                                                                                                                                               | [GNU Stow](https://www.gnu.org/software/stow/) symlinks into `$HOME`                                      |
 | **this repo: rc libraries**                              | the base `~/.zshrc` / `~/.bashrc` content: env, keybindings, zsh completion styling                                                                                                                                                              | `zsh/zshrc.zsh` + `bash/bashrc.bash`, **`source`d** from a generated real rc file (not stowed, see below) |
 | **this repo: `shell.d/`**                                | personal rc lines not worth a public module: k8s / docker aliases, `linuxbrew`, helper functions                                                                                                                                                 | a second marker block, sourced *after* omnishell                                                          |
 | **`~/.zshrc.local` / `~/.bashrc.local`**                 | machine-specific and secret: per-host `PATH`, tool completions, tokens. **Not version-controlled.**                                                                                                                                              | sourced last by the same marker block                                                                     |
 
 omnishell is consumed as a released binary (Homebrew tap / curl installer); this
-repo never modifies it. **omnishell 0.10.0 or newer is required**: older releases
+repo never modifies it. **omnishell 0.11.0 or newer is required**: older releases
 don't know all of the `starship`, `root-loops`, `tmux`, `broot`, `direnv`, `mise` and
 `colorized-man` modules, and install `mise`, `starship` and `broot` with a long
 source build where no distro package exists, 0.7.0 is the first with
@@ -37,8 +37,9 @@ source build where no distro package exists, 0.7.0 is the first with
 from a release binary or a source build is not on `PATH` at shell start (no
 `starship` prompt), before 0.8.0 `modern-aliases` is degraded where the
 distro has no `eza` package, before 0.9.0 there is no `zsh-completions`
-module, and before 0.10.0 there are no `navi`, `tealdeer`, `you-should-use` and
-`dynamic-completion` modules. `bootstrap.sh` upgrades an older
+module, before 0.10.0 there are no `navi`, `tealdeer`, `you-should-use` and
+`dynamic-completion` modules, and before 0.11.0 there is no `zsh-edit-select`
+module. `bootstrap.sh` upgrades an older
 install, or stops with a message if it can't.
 
 ```text
@@ -80,11 +81,11 @@ exec $SHELL
 `bootstrap.sh`:
 
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
-2. installs dependencies, omnishell (upgrading it below 0.10.0) and Ghostty (unless switched off), and zsh if you opted in, then offers to make zsh your login shell (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
+2. installs dependencies, omnishell (upgrading it below 0.11.0) and Ghostty (unless switched off), and zsh if you opted in, then offers to make zsh your login shell (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
 4. stows the packages (unless skipped)
 5. writes the git `delta` config and asks for your git identity (unless skipped) (see [Git identity](#-git-identity))
-6. on Homebrew, removes the group/other write bit from `share` and `share/zsh` so zsh's `compinit` accepts the `zsh-completions` directory (unless switched off), then applies `omnishell/config.toml`, which also installs `zsh-completions`, `navi`, `tealdeer`, `you-should-use`, `starship`, `mise`, `tmux`, `direnv` and `broot`
+6. on Homebrew, removes the group/other write bit from `share` and `share/zsh` so zsh's `compinit` accepts the `zsh-completions` directory (unless switched off), then applies `omnishell/config.toml`, which also installs `zsh-completions`, `navi`, `tealdeer`, `you-should-use`, `zsh-edit-select`, `starship`, `mise`, `tmux`, `direnv` and `broot`
 7. appends the `shell.d` block to both rc files
 8. renders the terminal colour themes
 
@@ -388,6 +389,7 @@ omnishell doctor     # check for drift / degraded modules
 | `navi`                                                            | interactive cheatsheet browser on Ctrl+G (uses `fzf`)                       | `key = "ctrl-g"`                             |
 | `tealdeer`                                                        | `tldr`: short command examples instead of long man pages                    | -                                            |
 | `you-should-use`                                                  | zsh only: reminds you of an existing alias for the command you typed        | `message_position`, `mode`, `ignored_aliases` |
+| `zsh-edit-select`                                                 | zsh only: edit the command line like a text editor (Shift selection, copy, cut, paste, undo, mouse); see below | `terminal_ghostty = true`                    |
 | `zoxide`                                                          | smarter `cd`                                                                | `cmd = "z"`                                  |
 | `modern-aliases`                                                  | `ls` / `cat` / `find` → `eza` / `bat` / `fd`                                | `replace = [...]`                            |
 | `colorized-man`                                                   | man pages through `bat`; plain `less` colours when `bat` is missing         | -                                            |
@@ -397,6 +399,13 @@ omnishell doctor     # check for drift / degraded modules
 | `starship`                                                        | prompt; seeds `~/.config/omnishell/starship.toml` once, never overwrites it | edit that file for prompt styling            |
 | `root-loops`                                                      | OSC 4/10/11 palette push on shell start                                     | `appearance = "dark"`                        |
 | `tmux`                                                            | installs tmux; optional auto-attach to a session on shell start             | `session = "default"`, `auto_attach = false` |
+
+`zsh-edit-select` needs key bindings in the terminal. `omnishell apply` writes the Ghostty ones
+to `~/.config/ghostty.local` (`terminal_ghostty = true`); restart Ghostty afterwards. That file loads
+after the tracked keybinds, so `Cmd+A` / `Cmd+C` / `Cmd+X` / `Cmd+Z` act on the command line instead of
+selecting or copying terminal text (`copy-on-select` still copies mouse selections). On macOS the mouse
+selection needs the Accessibility permission: run `edit-select setup-ax`. The Linux Ghostty
+bindings overlap with `keybinds-linux.conf` and are not verified.
 
 `ble-sh` (bash autosuggestions and highlighting) is not enabled: omnishell rejects it together with `fzf`, which `navi` needs.
 

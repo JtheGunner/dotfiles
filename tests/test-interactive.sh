@@ -43,7 +43,7 @@ check "the error names the settings file"             'grep -qF "$CONF" <<< "$OU
 check "and nothing was written"                       '[ ! -e "$WORK/home/.zshrc" ] && cmp -s "$CONF" "$DOTFILES/config.toml.example"'
 check "--help lists --interactive"                    '"$DOTFILES/bootstrap.sh" --help | grep -q -- --interactive'
 ix_run '' 'printf %s "$OMNISHELL_MIN_VERSION"'
-check "omnishell 0.10.0 is the floor"                  '[ "$OUT" = 0.10.0 ]'
+check "omnishell 0.11.0 is the floor"                  '[ "$OUT" = 0.11.0 ]'
 
 echo ">> reloading settings"
 fresh
@@ -137,7 +137,7 @@ check "both steps do nothing without --interactive"         '[ "$RC" = 0 ] && gr
 
 echo ">> docs"
 check "the README names --interactive"                      'grep -q -- "--interactive" "$DOTFILES/README.md"'
-check "the README names the 0.10.0 floor"                    'grep -q "omnishell 0.10.0 or newer" "$DOTFILES/README.md" && ! grep -q "0\.6\.0" "$DOTFILES/README.md"'
+check "the README names the 0.11.0 floor"                    'grep -q "omnishell 0.11.0 or newer" "$DOTFILES/README.md" && ! grep -q "0\.6\.0" "$DOTFILES/README.md"'
 check "the template mentions --interactive"                 'grep -q -- "--interactive" "$DOTFILES/config.toml.example"'
 
 echo ">> modules: a declined selection does not linger"
