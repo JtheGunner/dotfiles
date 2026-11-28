@@ -184,7 +184,8 @@ done
 
 echo ">> fix_completion_permissions closes writable Homebrew completion directories"
 PREFIX="$WORK/prefix"
-mode_of() { stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1"; }
+# GNU stat first: its -f means "filesystem status" and exits 0, so BSD's -f must come second
+mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
 # a Homebrew-like tree whose share/ and share/zsh/ are writable by the group
 open_tree() {
   rm -rf "$PREFIX"
