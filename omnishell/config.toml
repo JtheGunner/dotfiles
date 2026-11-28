@@ -58,6 +58,18 @@ enabled = true
 [modules.syntax-highlighting]
 enabled = true
 
+# Edit the command line like a text editor: Shift+arrow selection, copy, cut, paste,
+# undo and mouse selection (zsh only; omnishell >= 0.11.0). It loads after
+# autosuggestions and syntax-highlighting. The terminal has to send the plugin's key
+# sequences to the shell: terminal_ghostty makes `omnishell apply` write the Ghostty
+# keybinds to ~/.config/ghostty.local (loaded after the tracked keybinds, so Cmd+A /
+# Cmd+C / Cmd+X / Cmd+Z act on the command line; restart Ghostty afterwards). On macOS
+# mouse selection also needs the Accessibility permission: run `edit-select setup-ax`.
+[modules.zsh-edit-select]
+enabled = true
+[modules.zsh-edit-select.options]
+terminal_ghostty = true
+
 [modules.fzf]
 enabled = true
 [modules.fzf.options]
