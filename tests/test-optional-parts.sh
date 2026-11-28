@@ -248,12 +248,14 @@ check "omnishell/config.toml enables dynamic-completion" 'module_enabled dynamic
 check "dynamic-completion lists the self-completing CLIs" 'grep -qxF "commands = [\"terraform\", \"vault\", \"aws=aws_completer\", \"mc\"]" "$OMNISHELL_DEFAULT"'
 check "ble-sh stays off (it conflicts with fzf)"      '! grep -q "^\[modules\.ble-sh\]" "$OMNISHELL_DEFAULT"'
 check "fzf stays enabled (navi requires it)"          'module_enabled fzf'
-# omnishell validate only knows these modules from 0.10.0 on
-if command -v omnishell >/dev/null 2>&1 && [ "$(printf '%s\n0.10.0\n' "$(omnishell version | awk '{print $1}')" | sort -V | head -n1)" = 0.10.0 ]; then
+check "omnishell/config.toml enables zsh-edit-select" 'module_enabled zsh-edit-select'
+check "zsh-edit-select configures Ghostty"            'awk "/^\[modules\.zsh-edit-select\.options\]/ {f=1; next} /^\[/ {f=0} f && /^terminal_ghostty = true/ {ok=1} END {exit !ok}" "$OMNISHELL_DEFAULT"'
+# omnishell validate only knows these modules from 0.11.0 on
+if command -v omnishell >/dev/null 2>&1 && [ "$(printf '%s\n0.11.0\n' "$(omnishell version | awk '{print $1}')" | sort -V | head -n1)" = 0.11.0 ]; then
   mkdir -p "$WORK/validate/omnishell"; cp "$OMNISHELL_DEFAULT" "$WORK/validate/omnishell/config.toml"
   check "omnishell validate accepts the default config" 'XDG_CONFIG_HOME="$WORK/validate" omnishell validate >/dev/null 2>&1'
 else
-  echo "   skip omnishell validate (omnishell 0.10.0 or newer not installed)"
+  echo "   skip omnishell validate (omnishell 0.11.0 or newer not installed)"
 fi
 
 echo ">> main guards the generated config per stow package"
