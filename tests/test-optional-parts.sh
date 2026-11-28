@@ -238,6 +238,24 @@ check "a suggested command quotes an unusual directory name" 'grep -qF "sudo chm
 
 check "omnishell/config.toml enables the zsh-completions module" 'awk "/^\[modules\.zsh-completions\]/ {f=1; next} /^\[/ {f=0} f && /^enabled = true/ {ok=1} END {exit !ok}" "$DOTFILES/omnishell/config.toml"'
 
+echo ">> the default omnishell modules"
+OMNISHELL_DEFAULT="$DOTFILES/omnishell/config.toml"
+module_enabled() { awk -v m="$1" '$0 == "[modules." m "]" {f=1; next} /^\[/ {f=0} f && /^enabled = true/ {ok=1} END {exit !ok}' "$OMNISHELL_DEFAULT"; }
+check "omnishell/config.toml enables navi"            'module_enabled navi'
+check "omnishell/config.toml enables tealdeer"        'module_enabled tealdeer'
+check "omnishell/config.toml enables you-should-use"  'module_enabled you-should-use'
+check "omnishell/config.toml enables dynamic-completion" 'module_enabled dynamic-completion'
+check "dynamic-completion lists the self-completing CLIs" 'grep -qxF "commands = [\"terraform\", \"vault\", \"aws=aws_completer\", \"mc\"]" "$OMNISHELL_DEFAULT"'
+check "ble-sh stays off (it conflicts with fzf)"      '! grep -q "^\[modules\.ble-sh\]" "$OMNISHELL_DEFAULT"'
+check "fzf stays enabled (navi requires it)"          'module_enabled fzf'
+# omnishell validate only knows these modules from 0.10.0 on
+if command -v omnishell >/dev/null 2>&1 && [ "$(printf '%s\n0.10.0\n' "$(omnishell version | awk '{print $1}')" | sort -V | head -n1)" = 0.10.0 ]; then
+  mkdir -p "$WORK/validate/omnishell"; cp "$OMNISHELL_DEFAULT" "$WORK/validate/omnishell/config.toml"
+  check "omnishell validate accepts the default config" 'XDG_CONFIG_HOME="$WORK/validate" omnishell validate >/dev/null 2>&1'
+else
+  echo "   skip omnishell validate (omnishell 0.10.0 or newer not installed)"
+fi
+
 echo ">> main guards the generated config per stow package"
 STEPS="check_interactive_preconditions check_checkout_consistency seed_bootstrap_config interactive_settings install_deps ensure_zsh ensure_default_shell install_ghostty install_omnishell interactive_modules write_rc_base stow_packages setup_ghostty_keybinds render_ghostty_settings render_tmux_settings render_git_settings setup_git_delta setup_git_identity setup_git_signing_key fix_completion_permissions apply_omnishell wire_shell_d setup_terminal_app finish"
 # <skip_stow list>: run main with every step stubbed; OUT lists the steps that ran

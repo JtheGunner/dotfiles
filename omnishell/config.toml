@@ -31,6 +31,27 @@ enabled = true
 [modules.history.options]
 size = 50000
 
+# Interactive cheatsheet browser on Ctrl+G (omnishell >= 0.10.0). It uses fzf as its
+# selector, so fzf must stay enabled. That is also why ble-sh (bash autosuggestions)
+# is not enabled: omnishell rejects ble-sh together with fzf.
+[modules.navi]
+enabled = true
+
+# `tldr` client: short, practical command examples instead of long man pages.
+[modules.tealdeer]
+enabled = true
+
+# Reminds you of an existing alias when you type the long command (zsh only).
+[modules.you-should-use]
+enabled = true
+
+# `complete -C` for CLIs that complete themselves (bash only). A command without a
+# binary on PATH is skipped silently; `name=binary` names another completer.
+[modules.dynamic-completion]
+enabled = true
+[modules.dynamic-completion.options]
+commands = ["terraform", "vault", "aws=aws_completer", "mc"]
+
 [modules.autosuggestions]
 enabled = true
 
