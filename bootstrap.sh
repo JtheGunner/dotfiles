@@ -218,12 +218,13 @@ reload_settings() {
 # eza as a release binary where the distro has no package (Debian 12), instead
 # of degrading modern-aliases; 0.9.0 adds the zsh-completions module (fpath before
 # compinit) and the `omnishell doctor` check for writable completion directories;
-# 0.10.0 adds the navi, tealdeer, you-should-use and dynamic-completion modules.
+# 0.10.0 adds the navi, tealdeer, you-should-use and dynamic-completion modules;
+# 0.11.0 adds the zsh-edit-select module.
 # What has no
 # binary (broot on 32-bit ARM, mise on armv6, everything on other CPUs) still
 # builds from source, which needs Rust 1.95 for mise / starship (broot: 1.85) -
 # newer than what Debian / Ubuntu LTS ship as `cargo`.
-OMNISHELL_MIN_VERSION="0.10.0"
+OMNISHELL_MIN_VERSION="0.11.0"
 RUST_MIN_VERSION="1.95"
 
 # What a cargo build of mise needs besides Rust: a C toolchain, cmake (libz-ng-sys),
