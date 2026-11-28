@@ -119,6 +119,7 @@ bootstrap.install_ghostty bool
 bootstrap.skip_packages list
 bootstrap.skip_stow list
 bootstrap.terminal_app_profile bool
+bootstrap.fix_completion_permissions bool
 ghostty.keybinds enum:auto,mac,linux
 ghostty.font_family string
 ghostty.font_size positive

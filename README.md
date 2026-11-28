@@ -22,21 +22,22 @@ nothing is configured twice:
 
 | Layer                                                    | Owns                                                                                                                                                                                                                                             | Mechanism                                                                                                 |
 |----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
-| **[omnishell](https://github.com/JtheGunner/omnishell)** | rc *lines*: plugin inits, history, completion, `fzf`, `zoxide`, `modern-aliases`, `colorized-man`, `direnv`, `broot`, `mise`, `starship` (prompt + its seeded config), `root-loops` (OSC palette push), `tmux` (installs it; auto-attach is off) | one marker block in `~/.zshrc` / `~/.bashrc`, sourcing a generated `init.<shell>`                         |
+| **[omnishell](https://github.com/JtheGunner/omnishell)** | rc *lines*: plugin inits, history, completion, `zsh-completions`, `fzf`, `zoxide`, `modern-aliases`, `colorized-man`, `direnv`, `broot`, `mise`, `starship` (prompt + its seeded config), `root-loops` (OSC palette push), `tmux` (installs it; auto-attach is off) | one marker block in `~/.zshrc` / `~/.bashrc`, sourcing a generated `init.<shell>`                         |
 | **this repo: stow packages**                             | standalone config *files*: `git`, `tmux` (`.tmux.conf` only), `bat`, `ghostty` (+ optional `nvim`)                                                                                                                                               | [GNU Stow](https://www.gnu.org/software/stow/) symlinks into `$HOME`                                      |
 | **this repo: rc libraries**                              | the base `~/.zshrc` / `~/.bashrc` content: env, keybindings, zsh completion styling                                                                                                                                                              | `zsh/zshrc.zsh` + `bash/bashrc.bash`, **`source`d** from a generated real rc file (not stowed, see below) |
 | **this repo: `shell.d/`**                                | personal rc lines not worth a public module: k8s / docker aliases, `linuxbrew`, helper functions                                                                                                                                                 | a second marker block, sourced *after* omnishell                                                          |
 | **`~/.zshrc.local` / `~/.bashrc.local`**                 | machine-specific and secret: per-host `PATH`, tool completions, tokens. **Not version-controlled.**                                                                                                                                              | sourced last by the same marker block                                                                     |
 
 omnishell is consumed as a released binary (Homebrew tap / curl installer); this
-repo never modifies it. **omnishell 0.8.0 or newer is required**: older releases
+repo never modifies it. **omnishell 0.9.0 or newer is required**: older releases
 don't know all of the `starship`, `root-loops`, `tmux`, `broot`, `direnv`, `mise` and
 `colorized-man` modules, and install `mise`, `starship` and `broot` with a long
 source build where no distro package exists, 0.7.0 is the first with
 `omnishell tui`, which `--interactive` uses, before 0.7.1 a tool installed
 from a release binary or a source build is not on `PATH` at shell start (no
-`starship` prompt), and before 0.8.0 `modern-aliases` is degraded where the
-distro has no `eza` package. `bootstrap.sh` upgrades an older
+`starship` prompt), before 0.8.0 `modern-aliases` is degraded where the
+distro has no `eza` package, and before 0.9.0 there is no `zsh-completions`
+module. `bootstrap.sh` upgrades an older
 install, or stops with a message if it can't.
 
 ```text
@@ -78,11 +79,11 @@ exec $SHELL
 `bootstrap.sh`:
 
 1. checks that nothing points at another checkout (see [Multiple checkouts](#multiple-checkouts))
-2. installs dependencies, omnishell (upgrading it below 0.8.0) and Ghostty (unless switched off), and zsh if you opted in, then offers to make zsh your login shell (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
+2. installs dependencies, omnishell (upgrading it below 0.9.0) and Ghostty (unless switched off), and zsh if you opted in, then offers to make zsh your login shell (see [Settings file](#-settings-file)); on apt systems with a CPU other than x86_64 / arm64 also a Rust toolchain
 3. writes real `~/.zshrc` / `~/.bashrc`
 4. stows the packages (unless skipped)
 5. writes the git `delta` config and asks for your git identity (unless skipped) (see [Git identity](#-git-identity))
-6. applies `omnishell/config.toml`, which also installs `starship`, `mise`, `tmux`, `direnv` and `broot`
+6. on Homebrew, removes the group/other write bit from `share` and `share/zsh` so zsh's `compinit` accepts the `zsh-completions` directory (unless switched off), then applies `omnishell/config.toml`, which also installs `zsh-completions`, `starship`, `mise`, `tmux`, `direnv` and `broot`
 7. appends the `shell.d` block to both rc files
 8. renders the terminal colour themes
 
@@ -180,6 +181,7 @@ overwritten. Point `DOTFILES_CONFIG` at another path to use a different file.
 | `[bootstrap]` `skip_packages`      | `fzf` `zoxide` `ripgrep` `fd` `bat` `git-delta` (list) | `[]` | -                            | `DOTFILES_SKIP_PACKAGES` |
 | `[bootstrap]` `skip_stow`          | `git` `tmux` `bat` `ghostty` (list) | `[]`      | -                                    | `DOTFILES_SKIP_STOW`    |
 | `[bootstrap]` `terminal_app_profile` | `true` · `false`              | `true`  | -                                    | `DOTFILES_TERMINAL_APP_PROFILE` |
+| `[bootstrap]` `fix_completion_permissions` | `true` · `false`        | `true`  | -                                    | `DOTFILES_FIX_COMPLETION_PERMISSIONS` |
 | `[bootstrap]` `assume_yes`         | `true` · `false`                | `false` | `--yes`                              | `DOTFILES_ASSUME_YES`   |
 | `[bootstrap]` `terminals`          | list of package names           | `[]`    | -                                    | `DOTFILES_TERMINALS`    |
 | `[ghostty]` `keybinds`             | `"auto"` · `"mac"` · `"linux"`  | `"auto"`| -                                    | `DOTFILES_GHOSTTY_KEYBINDS` |
@@ -220,6 +222,12 @@ size = 10000
 > `install_ghostty = false` (or `--no-ghostty`, `DOTFILES_INSTALL_GHOSTTY=0`) skips only the
 > Ghostty installation. The `ghostty` config is still stowed, so installing Ghostty later needs no
 > further setup. The environment variable accepts `1`/`0`, `true`/`false` or `yes`/`no`.
+>
+> `fix_completion_permissions = false` (or `DOTFILES_FIX_COMPLETION_PERMISSIONS=0`) stops
+> `bootstrap.sh` from changing permissions under the Homebrew prefix. By default it runs
+> `chmod go-w` on `share` and `share/zsh` (recursively, directories only) when they are group- or
+> world-writable, they belong to you and the `zsh-completions` module is on; a directory that belongs
+> to someone else is reported with the `sudo chmod go-w` command to run. Without Homebrew nothing happens.
 >
 > `skip_packages` leaves base packages out of the installation and `skip_stow` leaves stow
 > packages unlinked and their generated config unrendered. Skipping only stops bootstrap from
@@ -372,6 +380,7 @@ omnishell doctor     # check for drift / degraded modules
 | Module                                                            | What it does                                                                | Notable options                              |
 |-------------------------------------------------------------------|-----------------------------------------------------------------------------|----------------------------------------------|
 | `completion`, `history`                                           | zsh/bash plugin baseline                                                    | `history.size = 50000`                       |
+| `zsh-completions`                                                 | zsh only: extra completion definitions, on `fpath` before `compinit`        | -                                            |
 | `autosuggestions`, `syntax-highlighting`                          | zsh only: grey inline suggestions, command colouring as you type            | -                                            |
 | `fzf`                                                             | key bindings + defaults                                                     | `ctrl_r`, `ctrl_t`, `default_opts`           |
 | `zoxide`                                                          | smarter `cd`                                                                | `cmd = "z"`                                  |

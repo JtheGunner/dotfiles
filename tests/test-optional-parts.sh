@@ -14,7 +14,7 @@ check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
 
 # A PATH with only what bootstrap.sh and the library need when sourced.
 mkdir -p "$WORK/bin"
-for tool in head rm cat cp mkdir basename dirname uname id tr awk grep sed ln readlink cmp mv mktemp tee git; do
+for tool in head rm cat cp mkdir basename dirname uname id tr awk grep sed ln readlink cmp mv mktemp tee git find chmod stat; do
   ln -s "$(command -v "$tool")" "$WORK/bin/$tool"
 done
 
@@ -182,23 +182,79 @@ for setting in true false; do
   check "on Linux nothing runs or is logged (file $setting)" '[ ! -s "$CALLS" ] && ! grep -q "Terminal.app" <<<"$OUT"'
 done
 
+echo ">> fix_completion_permissions closes writable Homebrew completion directories"
+PREFIX="$WORK/prefix"
+# GNU stat first: its -f means "filesystem status" and exits 0, so BSD's -f must come second
+mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }
+# a Homebrew-like tree whose share/ and share/zsh/ are writable by the group
+open_tree() {
+  rm -rf "$PREFIX"
+  mkdir -p "$PREFIX/share/zsh/site-functions" "$PREFIX/share/man"
+  chmod 775 "$PREFIX/share" "$PREFIX/share/zsh"
+  chmod 777 "$PREFIX/share/zsh/site-functions"
+  chmod 775 "$PREFIX/share/man"
+}
+# <env assignments> <code run before the step>: run the step with a stubbed brew
+perm_run() {
+  sh_run "$1" 'brew() { [ "$1" = --prefix ] && echo "'"$PREFIX"'"; }; '"${2:-:}"'; fix_completion_permissions'
+}
+fresh; : > "$CONF"; open_tree
+perm_run '' ''
+check "share, share/zsh and its subdirectories lose group and other write" '[ "$(mode_of "$PREFIX/share")" = 755 ] && [ "$(mode_of "$PREFIX/share/zsh")" = 755 ] && [ "$(mode_of "$PREFIX/share/zsh/site-functions")" = 755 ]'
+check "directories outside share/zsh are left alone" '[ "$(mode_of "$PREFIX/share/man")" = 775 ]'
+check "the change is logged once" 'grep -q "removed group/other write permission from 3 directories" <<<"$OUT"'
+perm_run '' ''
+check "a second run changes nothing and prints nothing" '[ "$RC" = 0 ] && [ -z "$OUT" ]'
+
+fresh; conf '[bootstrap]' 'fix_completion_permissions = false'; open_tree
+perm_run '' ''
+check "file false leaves the permissions and logs the skip" '[ "$(mode_of "$PREFIX/share")" = 775 ] && grep -q "skipping completion directory permissions (fix_completion_permissions)" <<<"$OUT"'
+perm_run 'DOTFILES_FIX_COMPLETION_PERMISSIONS=1' ''
+check "the environment beats a file false" '[ "$(mode_of "$PREFIX/share")" = 755 ]'
+
+fresh; conf '[bootstrap]' 'fix_completion_permissions = true'; open_tree
+perm_run 'DOTFILES_FIX_COMPLETION_PERMISSIONS=no' ''
+check "the environment can switch it off" '[ "$(mode_of "$PREFIX/share")" = 775 ]'
+fresh; conf '[bootstrap]' 'fix_completion_permissions = false'; open_tree
+perm_run 'DOTFILES_FIX_COMPLETION_PERMISSIONS=bogus' ''
+check "an invalid value warns and falls back to the file" '[ "$(mode_of "$PREFIX/share")" = 775 ] && grep -q "invalid DOTFILES_FIX_COMPLETION_PERMISSIONS value .bogus." "$WORK/err"'
+
+fresh; conf '[modules.zsh-completions]' 'enabled = false'; open_tree
+perm_run '' ''
+check "nothing happens while the zsh-completions module is off" '[ "$(mode_of "$PREFIX/share")" = 775 ] && [ -z "$OUT" ]'
+
+fresh; : > "$CONF"; open_tree
+sh_run '' 'fix_completion_permissions'
+check "nothing happens without Homebrew" '[ "$RC" = 0 ] && [ -z "$OUT" ] && [ "$(mode_of "$PREFIX/share")" = 775 ]'
+
+fresh; : > "$CONF"; open_tree
+perm_run '' '_dir_is_mine() { return 1; }'
+check "a directory owned by someone else is only reported, with the command" '[ "$(mode_of "$PREFIX/share")" = 775 ] && grep -q "sudo chmod go-w" "$WORK/err" && ! grep -q "removed group/other" <<<"$OUT"'
+
+fresh; : > "$CONF"; open_tree
+mkdir "$PREFIX/share/zsh/odd dir'x"; chmod 777 "$PREFIX/share/zsh/odd dir'x"
+perm_run '' '_dir_is_mine() { return 1; }'
+check "a suggested command quotes an unusual directory name" 'grep -qF "sudo chmod go-w $(printf "%q" "$PREFIX/share/zsh/odd dir'"'"'x")" "$WORK/err"'
+
+check "omnishell/config.toml enables the zsh-completions module" 'awk "/^\[modules\.zsh-completions\]/ {f=1; next} /^\[/ {f=0} f && /^enabled = true/ {ok=1} END {exit !ok}" "$DOTFILES/omnishell/config.toml"'
+
 echo ">> main guards the generated config per stow package"
-STEPS="check_interactive_preconditions check_checkout_consistency seed_bootstrap_config interactive_settings install_deps ensure_zsh ensure_default_shell install_ghostty install_omnishell interactive_modules write_rc_base stow_packages setup_ghostty_keybinds render_ghostty_settings render_tmux_settings render_git_settings setup_git_delta setup_git_identity setup_git_signing_key apply_omnishell wire_shell_d setup_terminal_app finish"
+STEPS="check_interactive_preconditions check_checkout_consistency seed_bootstrap_config interactive_settings install_deps ensure_zsh ensure_default_shell install_ghostty install_omnishell interactive_modules write_rc_base stow_packages setup_ghostty_keybinds render_ghostty_settings render_tmux_settings render_git_settings setup_git_delta setup_git_identity setup_git_signing_key fix_completion_permissions apply_omnishell wire_shell_d setup_terminal_app finish"
 # <skip_stow list>: run main with every step stubbed; OUT lists the steps that ran
 main_run() {
   fresh; conf '[bootstrap]' "skip_stow = [$1]"
   sh_run '' 'for f in '"$STEPS"'; do eval "$f() { echo call:$f; }"; done; bash() { :; }; main'
 }
 main_run ''
-check "main runs every step by default" '[ "$(grep -c "^call:" <<<"$OUT")" = 23 ]'
+check "main runs every step by default" '[ "$(grep -c "^call:" <<<"$OUT")" = 24 ]'
 main_run '"git"'
-check "skip git drops the four git steps only" '[ "$(grep -c "^call:" <<<"$OUT")" = 19 ] && ! grep -qE "^call:(render_git_settings|setup_git_delta|setup_git_identity|setup_git_signing_key)$" <<<"$OUT"'
+check "skip git drops the four git steps only" '[ "$(grep -c "^call:" <<<"$OUT")" = 20 ] && ! grep -qE "^call:(render_git_settings|setup_git_delta|setup_git_identity|setup_git_signing_key)$" <<<"$OUT"'
 main_run '"tmux", "bat"'
 check "main logs each skipped stow package once, in the final settings" '[ "$(grep -c "^.*skipping stow package tmux (skip_stow)" <<<"$OUT")" = 1 ] && [ "$(grep -c "skipping stow package bat (skip_stow)" <<<"$OUT")" = 1 ]'
 main_run '"tmux"'
-check "skip tmux drops render_tmux_settings only" '[ "$(grep -c "^call:" <<<"$OUT")" = 22 ] && ! grep -q "^call:render_tmux_settings$" <<<"$OUT"'
+check "skip tmux drops render_tmux_settings only" '[ "$(grep -c "^call:" <<<"$OUT")" = 23 ] && ! grep -q "^call:render_tmux_settings$" <<<"$OUT"'
 main_run '"ghostty"'
-check "skip ghostty drops keybinds and settings but keeps install_ghostty" '[ "$(grep -c "^call:" <<<"$OUT")" = 21 ] && ! grep -qE "^call:(setup_ghostty_keybinds|render_ghostty_settings)$" <<<"$OUT" && grep -q "^call:install_ghostty$" <<<"$OUT"'
+check "skip ghostty drops keybinds and settings but keeps install_ghostty" '[ "$(grep -c "^call:" <<<"$OUT")" = 22 ] && ! grep -qE "^call:(setup_ghostty_keybinds|render_ghostty_settings)$" <<<"$OUT" && grep -q "^call:install_ghostty$" <<<"$OUT"'
 
 echo ">> warn when a skipped package is still used by an enabled module"
 # the warning goes to stderr; sh_run keeps it in $WORK/err
