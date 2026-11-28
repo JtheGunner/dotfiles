@@ -107,6 +107,7 @@ read_conf_values() {
   CONF_SKIP_PACKAGES="$(settings_get bootstrap.skip_packages)"
   CONF_SKIP_STOW="$(settings_get bootstrap.skip_stow)"
   CONF_TERMINAL_APP_PROFILE="$(settings_get bootstrap.terminal_app_profile)"
+  CONF_FIX_COMPLETION_PERMISSIONS="$(settings_get bootstrap.fix_completion_permissions)"
   CONF_ASSUME_YES="$(settings_get bootstrap.assume_yes)"
   CONF_TERMINALS="$(settings_get bootstrap.terminals)"
   CONF_GHOSTTY_KEYBINDS="$(settings_get ghostty.keybinds)"
@@ -215,11 +216,13 @@ reload_settings() {
 # its vendor/bin on PATH, without which a release binary or source build is not
 # found at shell start (no starship prompt, no mise / broot); 0.8.0 installs
 # eza as a release binary where the distro has no package (Debian 12), instead
-# of degrading modern-aliases. What has no
+# of degrading modern-aliases; 0.9.0 adds the zsh-completions module (fpath before
+# compinit) and the `omnishell doctor` check for writable completion directories.
+# What has no
 # binary (broot on 32-bit ARM, mise on armv6, everything on other CPUs) still
 # builds from source, which needs Rust 1.95 for mise / starship (broot: 1.85) -
 # newer than what Debian / Ubuntu LTS ship as `cargo`.
-OMNISHELL_MIN_VERSION="0.8.0"
+OMNISHELL_MIN_VERSION="0.9.0"
 RUST_MIN_VERSION="1.95"
 
 # What a cargo build of mise needs besides Rust: a C toolchain, cmake (libz-ng-sys),
@@ -1158,6 +1161,54 @@ warn_skipped_packages_needed_by_modules() {
   done
 }
 
+# Whether fix_completion_permissions() changes anything, highest precedence first:
+# DOTFILES_FIX_COMPLETION_PERMISSIONS (1, true, yes / 0, false, no),
+# fix_completion_permissions in the settings file, default on.
+_fix_completion_permissions_enabled() {
+  local mode=""
+  if [ -n "${DOTFILES_FIX_COMPLETION_PERMISSIONS:-}" ]; then
+    case "$DOTFILES_FIX_COMPLETION_PERMISSIONS" in
+      1 | true | yes) mode=yes ;;
+      0 | false | no) mode=no ;;
+      *) warn "invalid DOTFILES_FIX_COMPLETION_PERMISSIONS value '$DOTFILES_FIX_COMPLETION_PERMISSIONS' (use 1, true, yes, 0, false or no) - ignored" ;;
+    esac
+  fi
+  if [ -z "$mode" ]; then
+    case "$CONF_FIX_COMPLETION_PERMISSIONS" in false) mode=no ;; *) mode=yes ;; esac
+  fi
+  [ "$mode" = yes ]
+}
+
+_dir_is_mine() { [ -O "$1" ]; }
+
+# zsh's compinit refuses to load completions from a directory that group or others
+# can write to ("zsh compinit: insecure directories"). Homebrew's share/ and
+# share/zsh/ are group-writable on some installs, so drop the group/other write bit
+# there - but only when the omnishell zsh-completions module is on and the
+# directory is yours; someone else's is reported with the command to run.
+fix_completion_permissions() {
+  command -v brew >/dev/null 2>&1 || return 0
+  _is_in_list zsh-completions "$(_enabled_omnishell_modules)" || return 0
+  _fix_completion_permissions_enabled || { log "skipping completion directory permissions (fix_completion_permissions)"; return 0; }
+  local prefix dir fixed=0
+  prefix="$(brew --prefix 2>/dev/null)" || return 0
+  [ -n "$prefix" ] || return 0
+  while IFS= read -r dir; do
+    [ -n "$dir" ] || continue
+    if _dir_is_mine "$dir"; then
+      if chmod go-w "$dir"; then fixed=$((fixed + 1)); else warn "could not run chmod go-w on $dir"; fi
+    else
+      warn "$dir can be written by group or others but belongs to someone else - run: sudo chmod go-w '$dir'"
+    fi
+  done < <(
+    find "$prefix/share" -maxdepth 0 -type d \( -perm -020 -o -perm -002 \) 2>/dev/null || true
+    find "$prefix/share/zsh" -type d \( -perm -020 -o -perm -002 \) 2>/dev/null || true
+  )
+  if [ "$fixed" -gt 0 ]; then
+    log "removed group/other write permission from $fixed directories under $prefix/share (zsh compinit rejects them)"
+  fi
+}
+
 apply_omnishell() {
   prepare_omnishell_config
   warn_skipped_packages_needed_by_modules
@@ -1500,6 +1551,7 @@ main() {
     setup_git_identity
     setup_git_signing_key
   fi
+  fix_completion_permissions
   apply_omnishell
   wire_shell_d
   log "rendering Root Loops colors"

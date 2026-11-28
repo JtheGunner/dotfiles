@@ -20,6 +20,12 @@ shells = ["zsh", "bash"]
 [modules.completion]
 enabled = true
 
+# Extra zsh completion definitions, put on fpath before the compinit of the module
+# above (zsh only; omnishell >= 0.9.0). bootstrap.sh also drops the group/other write
+# bit from Homebrew's share directories, which compinit would otherwise reject.
+[modules.zsh-completions]
+enabled = true
+
 [modules.history]
 enabled = true
 [modules.history.options]

@@ -56,6 +56,13 @@
 # Environment: DOTFILES_TERMINAL_APP_PROFILE (1/0, true/false, yes/no)
 #terminal_app_profile = true
 #
+# Drop the group/other write bit from Homebrew's share and share/zsh directories when the
+# omnishell zsh-completions module is enabled: true or false. zsh's compinit rejects
+# completions from writable directories ("insecure directories"). Only directories you
+# own are changed; others are reported with the command to run. Only matters with Homebrew.
+# Environment: DOTFILES_FIX_COMPLETION_PERMISSIONS (1/0, true/false, yes/no)
+#fix_completion_permissions = true
+#
 # Answer "yes" to every prompt, e.g. switch rc files and stow links from another
 # checkout to this one.
 # Flag: --yes    Environment: DOTFILES_ASSUME_YES (1 or 0)
