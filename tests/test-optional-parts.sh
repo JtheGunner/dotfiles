@@ -230,6 +230,13 @@ fresh; : > "$CONF"; open_tree
 perm_run '' '_dir_is_mine() { return 1; }'
 check "a directory owned by someone else is only reported, with the command" '[ "$(mode_of "$PREFIX/share")" = 775 ] && grep -q "sudo chmod go-w" "$WORK/err" && ! grep -q "removed group/other" <<<"$OUT"'
 
+fresh; : > "$CONF"; open_tree
+mkdir "$PREFIX/share/zsh/odd dir'x"; chmod 777 "$PREFIX/share/zsh/odd dir'x"
+perm_run '' '_dir_is_mine() { return 1; }'
+check "a suggested command quotes an unusual directory name" 'grep -qF "sudo chmod go-w $(printf "%q" "$PREFIX/share/zsh/odd dir'"'"'x")" "$WORK/err"'
+
+check "omnishell/config.toml enables the zsh-completions module" 'awk "/^\[modules\.zsh-completions\]/ {f=1; next} /^\[/ {f=0} f && /^enabled = true/ {ok=1} END {exit !ok}" "$DOTFILES/omnishell/config.toml"'
+
 echo ">> main guards the generated config per stow package"
 STEPS="check_interactive_preconditions check_checkout_consistency seed_bootstrap_config interactive_settings install_deps ensure_zsh ensure_default_shell install_ghostty install_omnishell interactive_modules write_rc_base stow_packages setup_ghostty_keybinds render_ghostty_settings render_tmux_settings render_git_settings setup_git_delta setup_git_identity setup_git_signing_key fix_completion_permissions apply_omnishell wire_shell_d setup_terminal_app finish"
 # <skip_stow list>: run main with every step stubbed; OUT lists the steps that ran

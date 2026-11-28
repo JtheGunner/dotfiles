@@ -1198,7 +1198,8 @@ fix_completion_permissions() {
     if _dir_is_mine "$dir"; then
       if chmod go-w "$dir"; then fixed=$((fixed + 1)); else warn "could not run chmod go-w on $dir"; fi
     else
-      warn "$dir can be written by group or others but belongs to someone else - run: sudo chmod go-w '$dir'"
+      # %q: a directory name is data, so the suggested command must stay one safe line
+      warn "$dir can be written by group or others but belongs to someone else - run: sudo chmod go-w $(printf '%q' "$dir")"
     fi
   done < <(
     find "$prefix/share" -maxdepth 0 -type d \( -perm -020 -o -perm -002 \) 2>/dev/null || true
